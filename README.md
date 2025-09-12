@@ -6,7 +6,7 @@ Backend สำหรับโปรเจกต์ **FoodBridge** (แจกข�
 ---
 
 ## 🚀 โครงสร้างโปรเจกต์
-
+```bash
 FoodBridge/
 ├── app/ # Dependency Injection (Deps)
 ├── config/ # โหลดค่าการตั้งค่า (.env)
@@ -20,6 +20,7 @@ FoodBridge/
 ├── Dockerfile # build backend เป็น container
 ├── go.mod / go.sum # dependency ของ Go
 └── main.go # entrypoint ของระบบ
+```
 
 
 ---
@@ -35,8 +36,10 @@ FoodBridge/
 ## ⚙️ วิธีรันโปรเจกต์บนเครื่อง
 
 ### 1. Clone repo
+```bash
 git clone https://github.com/RathaTart/FoodBridge.git
 cd FoodBridge
+```
 
 ### 2. สร้างไฟล์ .env
 คัดลอกจาก .env.example
@@ -51,10 +54,12 @@ go mod tidy
 go run ./main.go
 
 ### 5. ทดสอบ Health Check
+```bash
 curl http://localhost:8080/health
 คาดว่าจะได้:
 HTTP/1.1 200 OK
 ok
+```
 
 
 

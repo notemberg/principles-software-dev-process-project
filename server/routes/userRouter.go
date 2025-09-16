@@ -1,19 +1,22 @@
+// server/routes/userRouter.go
 package routes
 
 import (
-	"net/http"
-
+	userpkg "github.com/RathaTart/FoodBridge/pkg/user"
 	"github.com/labstack/echo/v4"
-	"github.com/RathaTart/FoodBridge/app"
+	"gorm.io/gorm"
 )
 
-func RegisterUserRoutes(v1 *echo.Group, d app.Deps) {
-	r := v1.Group("/users")
+// เหมือนไฟล์ router อื่น ๆ: ใช้ v1 group
+func RegisterUserRoutes(v1 *echo.Group, db *gorm.DB) {
+	repo := userpkg.NewRepository(db)
+	svc  := userpkg.NewService(db, repo)
+	ctrl := userpkg.NewController(svc)
 
-	r.GET("", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, echo.Map{
-			"feature": "user",
-			"items":   []any{}, // [] users
-		})
-	})
+	// /api/v1/...  (prefix มาจาก v1)
+	v1.POST("/auth/register", ctrl.Register)
+	v1.POST("/auth/login",    ctrl.Login)
+
+	v1.GET ("/users/:id",     ctrl.GetByID)
+	v1.PUT ("/users/:id",     ctrl.UpdateProfile)
 }

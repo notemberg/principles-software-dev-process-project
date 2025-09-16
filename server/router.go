@@ -23,7 +23,7 @@ func Setup(e *echo.Echo, d app.Deps) {
 	v1 := e.Group("/api/v1")
 
 	// register all routers
-	routes.RegisterUserRoutes(v1, d)
+	routes.RegisterUserRoutes(v1, d.DB)
 	routes.RegisterBookingRoutes(v1, d)
 	routes.RegisterPostRoutes(v1, d)
 	routes.RegisterPostDetailRoutes(v1, d)

@@ -1,15 +1,15 @@
-package user
+package dto
 
 type RegisterRequest struct {
-	Phone    string  `json:"phone" binding:"required"`
-	Email    *string `json:"email"`              // optional
-	Password string  `json:"password" binding:"required,min=8"`
-	FullName string  `json:"full_name" binding:"required"`
+	Phone    string  `json:"phone"`
+	Email    *string `json:"email"`
+	Password string  `json:"password"`
+	FullName string  `json:"full_name"`
 }
 
 type LoginRequest struct {
-	Login    string `json:"login" binding:"required"`   // phone หรือ email
-	Password string `json:"password" binding:"required"`
+	Login    string `json:"login"` // phone หรือ email
+	Password string `json:"password"`
 }
 
 type UpdateProfileRequest struct {

@@ -51,7 +51,7 @@ func (h *controllerImpl) GetByID(c echo.Context) error {
 }
 
 func (h *controllerImpl) UpdateProfile(c echo.Context) error {
-	var req dto.UpdateProfileRequest
+	var req dto.UpdateMeRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "bad request"})
 	}

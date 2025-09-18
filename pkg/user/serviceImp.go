@@ -120,7 +120,7 @@ func (s *serviceImpl) GetByID(id uint) (*dto.UserResponse, error) {
 	return s.toResponse(u), nil
 }
 
-func (s *serviceImpl) UpdateProfile(id uint, req dto.UpdateProfileRequest) (*dto.UserResponse, error) {
+func (s *serviceImpl) UpdateProfile(id uint, req dto.UpdateMeRequest) (*dto.UserResponse, error) {
 	u, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err

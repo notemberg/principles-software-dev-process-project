@@ -17,12 +17,19 @@ func RegisterUserRoutes(g *echo.Group, db *gorm.DB) {
 	g.POST("/auth/login", ctrl.Login)
 }
 
+// ===== Protected (ต้องใช้ token) =====
 func RegisterUserProtectedRoutes(g *echo.Group, db *gorm.DB) {
 	repo := userpkg.NewRepository(db)
 	svc := userpkg.NewService(db, repo)
 	ctrl := userpkg.NewController(svc)
 
-	// protected
+	// ตัวเอง
+	g.GET("/me", ctrl.Me)
+	g.PUT("/me", ctrl.UpdateMe)
+	g.PUT("/me/password", ctrl.ChangeMyPassword)
+
+	// ผู้ใช้อื่น
+	g.GET("/users", ctrl.List) 			// ?page=&page_size=&q=&verified=&sort=
 	g.GET("/users/:id", ctrl.GetByID)
-	g.PUT("/users/:id", ctrl.UpdateProfile)
+	g.DELETE("/users/:id", ctrl.Delete) // ลบได้เฉพาะ owner (uid==:id)
 }

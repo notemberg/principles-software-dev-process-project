@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt"
+	"github.com/RathaTart/FoodBridge/config"
 	"github.com/RathaTart/FoodBridge/dto"
 	"github.com/RathaTart/FoodBridge/entities"
 	"golang.org/x/crypto/bcrypt"
@@ -71,7 +73,7 @@ func (s *serviceImpl) Register(req dto.RegisterRequest) (*dto.UserResponse, erro
 	return s.toResponse(u), nil
 }
 
-func (s *serviceImpl) Login(req dto.LoginRequest) (*dto.UserResponse, error) {
+func (s *serviceImpl) Login(req dto.LoginRequest) (*dto.AuthResponse, error) {
 	login := strings.TrimSpace(req.Login)
 	u, err := s.repo.FindByLogin(login)
 	if err != nil {
@@ -80,16 +82,34 @@ func (s *serviceImpl) Login(req dto.LoginRequest) (*dto.UserResponse, error) {
 		}
 		return nil, err
 	}
-
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)) != nil {
 		return nil, errors.New("invalid credential")
 	}
 
+	// อัปเดต last login
 	now := time.Now()
 	u.LastLoginAt = &now
-	_ = s.repo.Update(u) // best-effort
+	if err := s.repo.Update(u); err != nil {
+		// ไม่ critical ถึงขั้นต้อง fail login — จะข้ามได้ถ้าต้องการ
+	}
 
-	return s.toResponse(u), nil
+	// ===== สร้าง JWT =====
+	cfg := config.Load()
+	claims := jwt.MapClaims{
+		"uid": u.UserID,          // ใช้ uid แทน
+		"exp": time.Now().Add(72 * time.Hour).Unix(), // อายุ 3 วัน
+		// "role": "RECEIVER",     // ถ้าอนาคตมี role ใส่ตรงนี้ได้
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokStr, err := token.SignedString([]byte(cfg.JWTSecret))
+	if err != nil {
+		return nil, errors.New("failed to sign token")
+	}
+
+	return &dto.AuthResponse{
+		Token: tokStr,
+		User:  s.toResponse(u),
+	}, nil
 }
 
 func (s *serviceImpl) GetByID(id uint) (*dto.UserResponse, error) {

@@ -5,6 +5,8 @@ go 1.24.0
 toolchain go1.24.5
 
 require (
+	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/labstack/echo/v4 v4.13.4
 	golang.org/x/crypto v0.42.0
 	gorm.io/driver/postgres v1.6.0

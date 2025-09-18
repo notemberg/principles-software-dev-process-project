@@ -35,6 +35,7 @@ func (h *controllerImpl) Login(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, resp)
 }
+
 func (h *controllerImpl) GetByID(c echo.Context) error {
 	idStr := c.Param("id")
 	var id uint

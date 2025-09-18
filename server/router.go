@@ -12,18 +12,19 @@ import (
 func Setup(e *echo.Echo, d app.Deps) {
 	useMiddlewares(e)
 
-	// health check
+	// ===== public =====
 	e.GET("/health", func(c echo.Context) error {
-		return c.String(http.StatusOK, "ok")
-	})
-	e.GET("/healthz", func(c echo.Context) error {
-		return c.String(http.StatusOK, "ok")
+		return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
 	})
 
-	v1 := e.Group("/api/v1")
+	// กลุ่ม v1 สำหรับ public auth
+	v1Public := e.Group("")
+	routes.RegisterUserRoutes(v1Public, d.DB) // มี /auth/login, /auth/register
 
-	// register all routers
-	routes.RegisterUserRoutes(v1, d.DB)
+	// ===== protected =====
+	v1 := e.Group("", AuthMiddleware())
+
+	// เรียกใช้ routers อื่น ๆ ใต้ v1 (protected)
 	routes.RegisterBookingRoutes(v1, d)
 	routes.RegisterPostRoutes(v1, d)
 	routes.RegisterPostDetailRoutes(v1, d)
@@ -33,4 +34,10 @@ func Setup(e *echo.Echo, d app.Deps) {
 	routes.RegisterNotificationRoutes(v1, d)
 	routes.RegisterVerificationRoutes(v1, d)
 	routes.RegisterHistoryRoutes(v1, d)
+	routes.RegisterUserProtectedRoutes(v1, d.DB)
+
+	for _, r := range e.Routes() {
+    e.Logger.Infof("%s  %s  -> %s", r.Method, r.Path, r.Name)
+ 	}
+
 }

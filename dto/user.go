@@ -37,6 +37,10 @@ type UserResponse struct {
 	LastLoginAt *int64  `json:"last_login_at,omitempty"`
 }
 
+type ShareLinkResponse struct {
+	ShareURL string `json:"share_url"`
+}
+
 type ListUsersQuery struct {
 	Page     int     `query:"page"`
 	PageSize int     `query:"page_size"`

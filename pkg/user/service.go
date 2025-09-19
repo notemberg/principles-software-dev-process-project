@@ -11,4 +11,6 @@ type Service interface {
 	ChangeMyPassword(uid uint, req dto.ChangePasswordRequest) error
 	List(q dto.ListUsersQuery) (*dto.PagedResult[dto.UserResponse], error)
 	Delete(uid uint, targetID uint) error // อนุญาตเฉพาะ uid==targetID
+	GetShareLinkByID(id uint) (*dto.ShareLinkResponse, error)
+	GetMyShareLink(uid uint) (*dto.ShareLinkResponse, error)
 }

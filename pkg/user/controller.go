@@ -9,7 +9,8 @@ type Controller interface {
 	Me(c echo.Context) error
 	UpdateMe(c echo.Context) error
 	ChangeMyPassword(c echo.Context) error
-
 	List(c echo.Context) error
 	Delete(c echo.Context) error
+	GetMyShareLink(c echo.Context) error
+	GetShareLinkByID(c echo.Context) error
 }

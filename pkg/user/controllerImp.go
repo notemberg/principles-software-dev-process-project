@@ -13,6 +13,33 @@ type controllerImpl struct{ svc Service }
 
 func NewController(svc Service) Controller { return &controllerImpl{svc: svc} }
 
+
+// ---------- helpers ----------
+func uidFromCtx(c echo.Context) (uint, error) {
+	v := c.Get("uid")
+	switch t := v.(type) {
+	case uint:
+		return t, nil
+	case int:
+		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
+		return uint(t), nil
+	case int64:
+		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
+		return uint(t), nil
+	case float64:
+		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
+		return uint(t), nil
+	default:
+		return 0, echo.NewHTTPError(http.StatusUnauthorized, "uid missing")
+	}
+}
+func mustUintParam(c echo.Context, name string) (uint, error) {
+	idStr := c.Param(name)
+	id64, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil { return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid id") }
+	return uint(id64), nil
+}
+
 func (h *controllerImpl) Register(c echo.Context) error {
 	var req dto.RegisterRequest
 	if err := c.Bind(&req); err != nil {
@@ -132,28 +159,18 @@ func (h *controllerImpl) Delete(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// ---------- helpers ----------
-func uidFromCtx(c echo.Context) (uint, error) {
-	v := c.Get("uid")
-	switch t := v.(type) {
-	case uint:
-		return t, nil
-	case int:
-		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
-		return uint(t), nil
-	case int64:
-		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
-		return uint(t), nil
-	case float64:
-		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
-		return uint(t), nil
-	default:
-		return 0, echo.NewHTTPError(http.StatusUnauthorized, "uid missing")
-	}
+func (h *controllerImpl) GetMyShareLink(c echo.Context) error {
+	uid, err := uidFromCtx(c); if err != nil { return err }
+	res, err := h.svc.GetMyShareLink(uid)
+	if err != nil { return echo.NewHTTPError(http.StatusInternalServerError, err.Error()) }
+	return c.JSON(http.StatusOK, res)
 }
-func mustUintParam(c echo.Context, name string) (uint, error) {
-	idStr := c.Param(name)
-	id64, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil { return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid id") }
-	return uint(id64), nil
+
+func (h *controllerImpl) GetShareLinkByID(c echo.Context) error {
+	id, err := mustUintParam(c, "id"); if err != nil { return err }
+	res, err := h.svc.GetShareLinkByID(id)
+	if err != nil { return echo.NewHTTPError(http.StatusNotFound, err.Error()) }
+	return c.JSON(http.StatusOK, res)
 }
+
+

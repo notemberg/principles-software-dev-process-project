@@ -3,13 +3,16 @@ package user
 
 import (
 	"errors"
+	"os"
+	"regexp"
 	"strings"
 	"time"
+	"fmt"
 
-	"github.com/golang-jwt/jwt"
 	"github.com/RathaTart/FoodBridge/config"
 	"github.com/RathaTart/FoodBridge/dto"
 	"github.com/RathaTart/FoodBridge/entities"
+	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -22,6 +25,54 @@ type serviceImpl struct {
 
 func NewService(db *gorm.DB, repo Repository) Service {
 	return &serviceImpl{db: db, repo: repo}
+}
+
+// ---------- helpers ----------
+func toUnixPtr(t *time.Time) *int64 {
+	if t == nil {
+		return nil
+	}
+	u := t.Unix()
+	return &u
+}
+
+func (s *serviceImpl) toResponse(u *entities.User) *dto.UserResponse {
+	return &dto.UserResponse{
+		UserID:      u.UserID,
+		Phone:       u.Phone,
+		Email:       u.Email,
+		FullName:    u.FullName,
+		AvatarURL:   u.AvatarURL,
+		IsVerified:  u.IsVerified,
+		CreatedAt:   u.CreatedAt.Unix(),
+		UpdatedAt:   u.UpdatedAt.Unix(),
+		LastLoginAt: toUnixPtr(u.LastLoginAt),
+	}
+}
+
+func isNotFound(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), strings.ToLower(logger.ErrRecordNotFound.Error()))
+}
+
+var reNonAlnum = regexp.MustCompile(`[^a-z0-9\-]+`)
+
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ReplaceAll(s, " ", "-")
+	s = reNonAlnum.ReplaceAllString(s, "")
+	if s == "" {
+		s = "user"
+	}
+	return s
+}
+
+// helper: base URL สำหรับ FE
+func publicBaseURL() string {
+	if v := os.Getenv("PUBLIC_BASE_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	// ค่าเริ่มต้น (แก้เป็น domain จริงของ FE ได้)
+	return "http://localhost:3000"
 }
 
 // ---------- IMPLEMENTATION ----------
@@ -96,7 +147,7 @@ func (s *serviceImpl) Login(req dto.LoginRequest) (*dto.AuthResponse, error) {
 	// ===== สร้าง JWT =====
 	cfg := config.Load()
 	claims := jwt.MapClaims{
-		"uid": u.UserID,          // ใช้ uid แทน
+		"uid": u.UserID,                              // ใช้ uid แทน
 		"exp": time.Now().Add(72 * time.Hour).Unix(), // อายุ 3 วัน
 		// "role": "RECEIVER",     // ถ้าอนาคตมี role ใส่ตรงนี้ได้
 	}
@@ -122,25 +173,39 @@ func (s *serviceImpl) GetByID(id uint) (*dto.UserResponse, error) {
 
 func (s *serviceImpl) Me(uid uint) (*dto.UserResponse, error) {
 	u, err := s.repo.FindByID(uid)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return s.toResponse(u), nil
 }
 
 func (s *serviceImpl) UpdateMe(uid uint, req dto.UpdateMeRequest) (*dto.UserResponse, error) {
 	u, err := s.repo.FindByID(uid)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	if req.FullName != nil {
 		name := strings.TrimSpace(*req.FullName)
-		if name != "" { u.FullName = name }
+		if name != "" {
+			u.FullName = name
+		}
 	}
 	if req.Email != nil {
 		e := strings.TrimSpace(*req.Email)
-		if e == "" { u.Email = nil } else { u.Email = &e }
+		if e == "" {
+			u.Email = nil
+		} else {
+			u.Email = &e
+		}
 	}
 	if req.AvatarURL != nil {
 		av := strings.TrimSpace(*req.AvatarURL)
-		if av == "" { u.AvatarURL = nil } else { u.AvatarURL = &av }
+		if av == "" {
+			u.AvatarURL = nil
+		} else {
+			u.AvatarURL = &av
+		}
 	}
 
 	if err := s.repo.Update(u); err != nil {
@@ -164,7 +229,9 @@ func (s *serviceImpl) ChangeMyPassword(uid uint, req dto.ChangePasswordRequest) 
 	}
 
 	u, err := s.repo.FindByID(uid)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	// ตรวจรหัสเดิม
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.OldPassword)) != nil {
@@ -173,17 +240,24 @@ func (s *serviceImpl) ChangeMyPassword(uid uint, req dto.ChangePasswordRequest) 
 
 	// hash ใหม่
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	u.PasswordHash = string(hash)
 
 	return s.repo.Update(u)
 }
 
-
 func (s *serviceImpl) List(q dto.ListUsersQuery) (*dto.PagedResult[dto.UserResponse], error) {
-	if q.Page <= 0 { q.Page = 1 }
-	if q.PageSize <= 0 { q.PageSize = 20 }
-	if q.PageSize > 100 { q.PageSize = 100 }
+	if q.Page <= 0 {
+		q.Page = 1
+	}
+	if q.PageSize <= 0 {
+		q.PageSize = 20
+	}
+	if q.PageSize > 100 {
+		q.PageSize = 100
+	}
 
 	tx := s.db.Model(&entities.User{})
 
@@ -216,13 +290,15 @@ func (s *serviceImpl) List(q dto.ListUsersQuery) (*dto.PagedResult[dto.UserRespo
 
 	// count
 	var total int64
-	if err := tx.Count(&total).Error; err != nil { return nil, err }
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	// page
 	var users []entities.User
 	if err := tx.
 		Limit(q.PageSize).
-		Offset((q.Page-1)*q.PageSize).
+		Offset((q.Page - 1) * q.PageSize).
 		Find(&users).Error; err != nil {
 		return nil, err
 	}
@@ -255,27 +331,17 @@ func (s *serviceImpl) Delete(uid uint, targetID uint) error {
 	})
 }
 
-// ---------- helpers ----------
-func toUnixPtr(t *time.Time) *int64 {
-	if t == nil { return nil }
-	u := t.Unix()
-	return &u
-}
 
-func (s *serviceImpl) toResponse(u *entities.User) *dto.UserResponse {
-	return &dto.UserResponse{
-		UserID:      u.UserID,
-		Phone:       u.Phone,
-		Email:       u.Email,
-		FullName:    u.FullName,
-		AvatarURL:   u.AvatarURL,
-		IsVerified:  u.IsVerified,
-		CreatedAt:   u.CreatedAt.Unix(),
-		UpdatedAt:   u.UpdatedAt.Unix(),
-		LastLoginAt: toUnixPtr(u.LastLoginAt),
+func (s *serviceImpl) GetShareLinkByID(id uint) (*dto.ShareLinkResponse, error) {
+	u, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
 	}
+	slug := slugify(u.FullName)
+	url := publicBaseURL() + "/u/" + fmt.Sprintf("%d-%s", u.UserID, slug)
+	return &dto.ShareLinkResponse{ShareURL: url}, nil
 }
 
-func isNotFound(err error) bool {
-	return strings.Contains(strings.ToLower(err.Error()), strings.ToLower(logger.ErrRecordNotFound.Error()))
+func (s *serviceImpl) GetMyShareLink(uid uint) (*dto.ShareLinkResponse, error) {
+	return s.GetShareLinkByID(uid)
 }

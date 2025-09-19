@@ -27,9 +27,11 @@ func RegisterUserProtectedRoutes(g *echo.Group, db *gorm.DB) {
 	g.GET("/me", ctrl.Me)
 	g.PUT("/me", ctrl.UpdateMe)
 	g.PUT("/me/password", ctrl.ChangeMyPassword)
+	g.GET("/me/share-link", ctrl.GetMyShareLink)
+	g.GET("/users/:id/share-link", ctrl.GetShareLinkByID)
 
 	// ผู้ใช้อื่น
-	g.GET("/users", ctrl.List) 			// ?page=&page_size=&q=&verified=&sort=
+	g.GET("/users", ctrl.List) // ?page=&page_size=&q=&verified=&sort=
 	g.GET("/users/:id", ctrl.GetByID)
 	g.DELETE("/users/:id", ctrl.Delete) // ลบได้เฉพาะ owner (uid==:id)
 }

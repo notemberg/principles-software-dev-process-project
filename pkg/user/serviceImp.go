@@ -132,6 +132,7 @@ func (s *serviceImpl) Register(req dto.RegisterRequest) (*dto.UserResponse, erro
 		PasswordHash: string(hash),
 		FullName:     req.FullName,
 		IsVerified:   false,
+		Role:        "USER",
 	}
 
 	if err := s.repo.Create(u); err != nil {
@@ -165,7 +166,7 @@ func (s *serviceImpl) Login(req dto.LoginRequest) (*dto.AuthResponse, error) {
 	claims := jwt.MapClaims{
 		"uid": u.UserID,                              // ใช้ uid แทน
 		"exp": time.Now().Add(72 * time.Hour).Unix(), // อายุ 3 วัน
-		// "role": "RECEIVER",     // ถ้าอนาคตมี role ใส่ตรงนี้ได้
+		"role": u.Role, 
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokStr, err := token.SignedString([]byte(cfg.JWTSecret))

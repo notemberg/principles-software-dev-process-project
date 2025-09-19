@@ -32,7 +32,7 @@ func Setup(e *echo.Echo, d app.Deps) {
 	routes.RegisterLikeRoutes(v1, d)
 	routes.RegisterLocationRoutes(v1, d)
 	routes.RegisterNotificationRoutes(v1, d)
-	routes.RegisterVerificationRoutes(v1, d)
+	routes.RegisterVerificationRoutes(v1, d.DB)
 	routes.RegisterHistoryRoutes(v1, d)
 	routes.RegisterUserProtectedRoutes(v1, d.DB)
 	routes.RegisterReportRoutes(v1, d.DB)

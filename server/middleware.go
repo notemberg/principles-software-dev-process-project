@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
+	jwtv5 "github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
@@ -18,26 +18,30 @@ func useMiddlewares(e *echo.Echo) {
 	e.Use(middleware.CORS())
 }
 
-// AuthMiddleware: บังคับต้องมี JWT ยกเว้น white-list
+// -------------------- AUTH --------------------
+
+// AuthMiddleware: ตรวจ JWT แล้วใส่ uid/role ลง context
+// อนุญาต path สาธารณะ (login/register/health)
 func AuthMiddleware() echo.MiddlewareFunc {
 	cfg := config.Load()
 	secret := []byte(cfg.JWTSecret)
 
-	// path ที่อนุญาตแบบสาธารณะ
 	publicPaths := map[string]struct{}{
-		"/health":                 {},
-		"/api/v1/auth/login":     {},
-		"/api/v1/auth/register":  {},
+		"/health":              {},
+		"/auth/login":          {},
+		"/auth/register":       {},
+		"/api/v1/auth/login":   {},
+		"/api/v1/auth/register": {},
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			// อนุญาต public path
+			// อนุญาตเส้นทาง public
 			if _, ok := publicPaths[c.Path()]; ok {
 				return next(c)
 			}
 
-			// ดึง header Authorization
+			// อ่าน Authorization: Bearer <token>
 			auth := c.Request().Header.Get("Authorization")
 			parts := strings.SplitN(auth, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
@@ -45,10 +49,8 @@ func AuthMiddleware() echo.MiddlewareFunc {
 			}
 			tokenStr := parts[1]
 
-			// parse/validate token
-			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-				// จำกัด alg เป็น HS256
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			token, err := jwtv5.Parse(tokenStr, func(t *jwtv5.Token) (interface{}, error) {
+				if _, ok := t.Method.(*jwtv5.SigningMethodHMAC); !ok {
 					return nil, echo.NewHTTPError(http.StatusUnauthorized, "unexpected jwt signing method")
 				}
 				return secret, nil
@@ -57,16 +59,47 @@ func AuthMiddleware() echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired jwt")
 			}
 
-			// เก็บ claim ไว้ใน context (เช่น uid/role)
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				if uid, ok2 := claims["uid"]; ok2 {
-					c.Set("uid", uid)
+			// set uid/role ลง context (แปลงชนิดให้เรียบร้อย)
+			if claims, ok := token.Claims.(jwtv5.MapClaims); ok {
+				// uid อาจเป็น float64 จาก JSON
+				if v, ok := claims["uid"]; ok {
+					switch t := v.(type) {
+					case float64:
+						c.Set("uid", uint(t))
+					case int:
+						c.Set("uid", uint(t))
+					case int64:
+						c.Set("uid", uint(t))
+					case string:
+						// ไม่คาดหวังเป็น string แต่กันไว้
+						c.Set("uid", t)
+					default:
+						c.Set("uid", v)
+					}
 				}
-				if role, ok2 := claims["role"]; ok2 {
-					c.Set("role", role)
+				if role, ok := claims["role"]; ok {
+					if rs, ok := role.(string); ok {
+						c.Set("role", rs)
+					} else {
+						c.Set("role", role)
+					}
 				}
 			}
 
+			return next(c)
+		}
+	}
+}
+
+// AdminOnly: อนุญาตเฉพาะผู้ใช้ role=ADMIN
+func AdminOnly() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			roleAny := c.Get("role")
+			role, _ := roleAny.(string)
+			if strings.ToUpper(role) != "ADMIN" {
+				return echo.NewHTTPError(http.StatusForbidden, "admin only")
+			}
 			return next(c)
 		}
 	}

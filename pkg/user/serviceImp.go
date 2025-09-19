@@ -150,9 +150,19 @@ func (s *serviceImpl) UpdateMe(uid uint, req dto.UpdateMeRequest) (*dto.UserResp
 }
 
 func (s *serviceImpl) ChangeMyPassword(uid uint, req dto.ChangePasswordRequest) error {
+	// ความยาวขั้นต่ำ
 	if len(req.NewPassword) < 8 {
 		return errors.New("new password too short (min 8)")
 	}
+	// ต้องตรงกับฟิลด์ยืนยัน
+	if req.NewPassword != req.ConfirmNewPassword {
+		return errors.New("new password and confirm do not match")
+	}
+	// ไม่ควรเหมือนรหัสเดิม
+	if req.NewPassword == req.OldPassword {
+		return errors.New("new password must be different from old password")
+	}
+
 	u, err := s.repo.FindByID(uid)
 	if err != nil { return err }
 
@@ -160,6 +170,7 @@ func (s *serviceImpl) ChangeMyPassword(uid uint, req dto.ChangePasswordRequest) 
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.OldPassword)) != nil {
 		return errors.New("old password incorrect")
 	}
+
 	// hash ใหม่
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil { return err }
@@ -167,6 +178,7 @@ func (s *serviceImpl) ChangeMyPassword(uid uint, req dto.ChangePasswordRequest) 
 
 	return s.repo.Update(u)
 }
+
 
 func (s *serviceImpl) List(q dto.ListUsersQuery) (*dto.PagedResult[dto.UserResponse], error) {
 	if q.Page <= 0 { q.Page = 1 }

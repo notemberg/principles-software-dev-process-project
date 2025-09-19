@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/RathaTart/FoodBridge/entities"
-	"github.com/RathaTart/FoodBridge/server"       // ใช้ AuthMiddleware
+	"github.com/RathaTart/FoodBridge/server" // ใช้ AuthMiddleware
 	"github.com/RathaTart/FoodBridge/server/routes"
 
 	"github.com/labstack/echo/v4"
@@ -24,7 +24,7 @@ func buildDSN() string {
 	user := getenv("DB_USER", "admin")
 	pass := getenv("DB_PASSWORD", "1234")
 	name := getenv("DB_NAME", "mydb")
-	ssl  := getenv("DB_SSLMODE", "disable")
+	ssl := getenv("DB_SSLMODE", "disable")
 	return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
 		host, user, pass, name, port, ssl)
 }
@@ -45,7 +45,12 @@ func main() {
 	}
 
 	// ----- AutoMigrate -----
-	if err := db.AutoMigrate(&entities.User{}, &entities.Post{}, &entities.PostDetail{}); err != nil {
+	if err := db.AutoMigrate(
+		&entities.User{},
+		&entities.Post{},
+		&entities.PostDetail{},
+		&entities.Report{},
+	); err != nil {
 		log.Fatal("auto-migrate failed: ", err)
 	}
 
@@ -76,6 +81,7 @@ func main() {
 
 	routes.RegisterUserProtectedRoutes(protected, db)
 	routes.RegisterPostRoutes(protected, db)
+	routes.RegisterReportRoutes(protected, db)
 
 	// Debug routes (optional)
 	fmt.Println(">>> ROUTER SETUP: dumping routes")

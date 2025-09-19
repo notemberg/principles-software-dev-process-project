@@ -35,6 +35,7 @@ func Setup(e *echo.Echo, d app.Deps) {
 	routes.RegisterVerificationRoutes(v1, d)
 	routes.RegisterHistoryRoutes(v1, d)
 	routes.RegisterUserProtectedRoutes(v1, d.DB)
+	routes.RegisterReportRoutes(v1, d.DB)
 
 	for _, r := range e.Routes() {
     e.Logger.Infof("%s  %s  -> %s", r.Method, r.Path, r.Name)

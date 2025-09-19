@@ -1,6 +1,7 @@
 package post
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/RathaTart/FoodBridge/dto"
@@ -48,24 +49,36 @@ func (r *repositoryImpl) FindPostByID(postID uint) (*entities.Post, error) {
 func (r *repositoryImpl) ListPosts(q dto.ListPostsQuery, uid uint) ([]entities.Post, int64, error) {
 	tx := r.db.Model(&entities.Post{})
 
-	// filter คำค้น
+	// keyword
 	if strings.TrimSpace(q.Q) != "" {
 		like := "%" + strings.TrimSpace(q.Q) + "%"
 		tx = tx.Where(r.db.
 			Where("title ILIKE ?", like).
 			Or("description ILIKE ?", like))
 	}
-	// type/status
-	if q.Type != nil && *q.Type != "" {
-		tx = tx.Where("type = ?", strings.ToUpper(*q.Type))
-	}
+
+	// status
 	if q.Status != nil && *q.Status != "" {
 		tx = tx.Where("status = ?", strings.ToUpper(*q.Status))
 	}
-	// mine
+
+	// is_giveaway
+	if q.IsGiveaway != nil {
+		tx = tx.Where("is_giveaway = ?", *q.IsGiveaway)
+	}
+
+	// เฉพาะของฉัน
 	if q.Mine != nil && *q.Mine {
 		tx = tx.Where("provider_id = ?", uid)
 	}
+
+	// category (JSON array contains)
+	if q.Category != nil && strings.TrimSpace(*q.Category) != "" {
+		// ใช้ @> กับ jsonb (Postgres): categories @> '["ของคาว"]'
+		val, _ := json.Marshal([]string{strings.TrimSpace(*q.Category)})
+		tx = tx.Where("categories @> ?", string(val))
+	}
+
 	// sort
 	switch q.Sort {
 	case "created_at":
@@ -84,7 +97,6 @@ func (r *repositoryImpl) ListPosts(q dto.ListPostsQuery, uid uint) ([]entities.P
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-
 	if q.Page <= 0 { q.Page = 1 }
 	if q.PageSize <= 0 { q.PageSize = 20 }
 	if q.PageSize > 100 { q.PageSize = 100 }

@@ -6,58 +6,80 @@ import "time"
 type CreatePostRequest struct {
 	Title       string   `json:"title" validate:"required"`
 	Description string   `json:"description"`
-	Type        string   `json:"type" validate:"oneof=FREE DISCOUNT COMMUNITY"`
-	Price       *int     `json:"price"`    // nil เมื่อ FREE
-	Quantity    int      `json:"quantity"` // >=0
+
+	IsGiveaway bool   `json:"is_giveaway"` // toggle "ต้องการแจกอาหาร"
+	Price      *int   `json:"price"`       // 0=free, >0=discount, nil=unknown (community)
+	Quantity   *int   `json:"quantity"`    // nil=unknown (community)
+
+	OpenTime *time.Time `json:"open_time"`  // required if is_giveaway=true
+	CloseTime *time.Time `json:"close_time"`
 
 	Address string   `json:"address"`
 	Lat     *float64 `json:"lat"`
 	Lng     *float64 `json:"lng"`
+	Phone   string   `json:"phone"` // เบอร์ติดต่อในโพสต์
 
-	AvailableFrom *time.Time `json:"available_from"`
-	AvailableTo   *time.Time `json:"available_to"`
+	Categories []string `json:"categories"` // ["ของคาว","ของหวาน","ผักสด","ของสด"]
+	Images     []string `json:"images"`     // url/path รูป
 }
 
 type UpdatePostRequest struct {
-	Title       *string   `json:"title"`
-	Description *string   `json:"description"`
-	Type        *string   `json:"type"`   // oneof
-	Price       *int      `json:"price"`
-	Quantity    *int      `json:"quantity"`
-	Status      *string   `json:"status"` // OPEN/CLOSED
-	Address     *string   `json:"address"`
-	Lat         *float64  `json:"lat"`
-	Lng         *float64  `json:"lng"`
-	AvailableFrom *time.Time `json:"available_from"`
-	AvailableTo   *time.Time `json:"available_to"`
+	Title       *string  `json:"title"`
+	Description *string  `json:"description"`
+
+	IsGiveaway *bool    `json:"is_giveaway"`
+	Price      *int     `json:"price"`
+	Quantity   *int     `json:"quantity"`
+
+	OpenTime  *time.Time `json:"open_time"`
+	CloseTime *time.Time `json:"close_time"`
+
+	Status   *string   `json:"status"` // OPEN/CLOSED
+	Address  *string   `json:"address"`
+	Lat      *float64  `json:"lat"`
+	Lng      *float64  `json:"lng"`
+	Phone    *string   `json:"phone"`
+
+	Categories *[]string `json:"categories"`
+	Images     *[]string `json:"images"`
 }
 
+
 type PostResponse struct {
-	PostID      uint    `json:"post_id"`
-	ProviderID  uint    `json:"provider_id"`
+	PostID     uint    `json:"post_id"`
+	ProviderID uint    `json:"provider_id"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
-	Type        string  `json:"type"`
-	Price       *int    `json:"price"`
-	Quantity    int     `json:"quantity"`
-	Status      string  `json:"status"`
-	Address     string  `json:"address"`
-	Lat         *float64 `json:"lat"`
-	Lng         *float64 `json:"lng"`
-	AvailableFrom *int64 `json:"available_from,omitempty"`
-	AvailableTo   *int64 `json:"available_to,omitempty"`
-	CreatedAt   int64   `json:"created_at"`
-	UpdatedAt   int64   `json:"updated_at"`
+
+	IsGiveaway bool   `json:"is_giveaway"`
+	Price      *int   `json:"price"`
+	Quantity   *int   `json:"quantity"`
+
+	OpenTime  *int64 `json:"open_time,omitempty"`
+	CloseTime *int64 `json:"close_time,omitempty"`
+
+	Status  string  `json:"status"`
+	Address string  `json:"address"`
+	Lat     *float64 `json:"lat"`
+	Lng     *float64 `json:"lng"`
+	Phone   string  `json:"phone"`
+
+	Categories []string `json:"categories"`
+	Images     []string `json:"images"`
+
+	CreatedAt int64 `json:"created_at"`
+	UpdatedAt int64 `json:"updated_at"`
 }
 
 type ListPostsQuery struct {
 	Page     int     `query:"page"`
 	PageSize int     `query:"page_size"`
-	Q        string  `query:"q"`           // ค้น title/description
-	Type     *string `query:"type"`        // FREE|DISCOUNT|COMMUNITY
-	Status   *string `query:"status"`      // OPEN|CLOSED
-	Mine     *bool   `query:"mine"`        // true = เฉพาะของเรา (provider_id == uid)
-	Sort     string  `query:"sort"`        // created_at|-created_at|title|-title
+	Q        string  `query:"q"`            // title/description
+	Status   *string `query:"status"`       // OPEN/CLOSED
+	Mine     *bool   `query:"mine"`         // เฉพาะของฉัน (provider_id == uid)
+	IsGiveaway *bool `query:"is_giveaway"`  // filter by mode
+	Category *string `query:"category"`     // เช่น ของคาว
+	Sort     string  `query:"sort"`         // created_at|-created_at|title|-title
 }
 
 // ====== PostDetail ======

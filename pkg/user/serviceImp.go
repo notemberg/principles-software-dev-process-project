@@ -28,6 +28,10 @@ func NewService(db *gorm.DB, repo Repository) Service {
 }
 
 // ---------- helpers ----------
+var rePhone = regexp.MustCompile(`^[0-9+\- ()]{6,20}$`)
+var rePostal = regexp.MustCompile(`^[0-9]{4,6}$`)
+
+
 func toUnixPtr(t *time.Time) *int64 {
 	if t == nil {
 		return nil
@@ -38,17 +42,29 @@ func toUnixPtr(t *time.Time) *int64 {
 
 func (s *serviceImpl) toResponse(u *entities.User) *dto.UserResponse {
 	return &dto.UserResponse{
-		UserID:      u.UserID,
-		Phone:       u.Phone,
-		Email:       u.Email,
-		FullName:    u.FullName,
-		AvatarURL:   u.AvatarURL,
-		IsVerified:  u.IsVerified,
+		UserID:     u.UserID,
+		Phone:      u.Phone,
+		Email:      u.Email,
+		FullName:   u.FullName,
+		AvatarURL:  u.AvatarURL,
+		IsVerified: u.IsVerified,
+
+		// ✅ ฟิลด์โปรไฟล์ใหม่ (ให้แสดงผลใน /me, /users/:id, /auth/login, /users list)
+		DisplayName: u.DisplayName,
+		FirstName:   u.FirstName,
+		LastName:    u.LastName,
+		Bio:         u.Bio,
+		AddressLine: u.AddressLine,
+		Province:    u.Province,
+		PostalCode:  u.PostalCode,
+		Phone2:      u.Phone2,
+
 		CreatedAt:   u.CreatedAt.Unix(),
 		UpdatedAt:   u.UpdatedAt.Unix(),
 		LastLoginAt: toUnixPtr(u.LastLoginAt),
 	}
 }
+
 
 func isNotFound(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), strings.ToLower(logger.ErrRecordNotFound.Error()))
@@ -181,36 +197,30 @@ func (s *serviceImpl) Me(uid uint) (*dto.UserResponse, error) {
 
 func (s *serviceImpl) UpdateMe(uid uint, req dto.UpdateMeRequest) (*dto.UserResponse, error) {
 	u, err := s.repo.FindByID(uid)
-	if err != nil {
-		return nil, err
+	if err != nil { return nil, err }
+
+	if req.FullName != nil   { u.FullName  = strings.TrimSpace(*req.FullName) }
+	if req.Email != nil      { v := strings.TrimSpace(*req.Email); u.Email = &v }
+	if req.AvatarURL != nil  { v := strings.TrimSpace(*req.AvatarURL); u.AvatarURL = &v }
+
+	if req.DisplayName != nil { u.DisplayName = strings.TrimSpace(*req.DisplayName) }
+	if req.FirstName != nil   { u.FirstName   = strings.TrimSpace(*req.FirstName) }
+	if req.LastName != nil    { u.LastName    = strings.TrimSpace(*req.LastName) }
+	if req.Bio != nil         { u.Bio         = strings.TrimSpace(*req.Bio) }
+	if req.AddressLine != nil { u.AddressLine = strings.TrimSpace(*req.AddressLine) }
+	if req.Province != nil    { u.Province    = strings.TrimSpace(*req.Province) }
+	if req.PostalCode != nil  {
+		v := strings.TrimSpace(*req.PostalCode)
+		if v != "" && !rePostal.MatchString(v) { return nil, errors.New("invalid postal_code") }
+		u.PostalCode = v
+	}
+	if req.Phone != nil {
+		v := strings.TrimSpace(*req.Phone)
+		if v != "" && !rePhone.MatchString(v) { return nil, errors.New("invalid phone") }
+		u.Phone2 = v
 	}
 
-	if req.FullName != nil {
-		name := strings.TrimSpace(*req.FullName)
-		if name != "" {
-			u.FullName = name
-		}
-	}
-	if req.Email != nil {
-		e := strings.TrimSpace(*req.Email)
-		if e == "" {
-			u.Email = nil
-		} else {
-			u.Email = &e
-		}
-	}
-	if req.AvatarURL != nil {
-		av := strings.TrimSpace(*req.AvatarURL)
-		if av == "" {
-			u.AvatarURL = nil
-		} else {
-			u.AvatarURL = &av
-		}
-	}
-
-	if err := s.repo.Update(u); err != nil {
-		return nil, err
-	}
+	if err := s.repo.Update(u); err != nil { return nil, err }
 	return s.toResponse(u), nil
 }
 

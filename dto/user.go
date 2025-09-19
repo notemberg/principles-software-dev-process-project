@@ -13,9 +13,17 @@ type LoginRequest struct {
 }
 
 type UpdateMeRequest struct {
-	FullName  *string `json:"full_name"`
-	Email     *string `json:"email"`
-	AvatarURL *string `json:"avatar_url"`
+	FullName    *string `json:"full_name"`
+	Email       *string `json:"email"`
+	AvatarURL   *string `json:"avatar_url"`
+	DisplayName *string `json:"display_name"`
+	FirstName   *string `json:"first_name"`
+	LastName    *string `json:"last_name"`
+	Bio         *string `json:"bio"`
+	AddressLine *string `json:"address_line"`
+	Province    *string `json:"province"`
+	PostalCode  *string `json:"postal_code"`
+	Phone       *string `json:"phone"`
 }
 
 type ChangePasswordRequest struct {
@@ -26,15 +34,24 @@ type ChangePasswordRequest struct {
 
 
 type UserResponse struct {
-	UserID      uint    `json:"user_id"`
-	Phone       string  `json:"phone"`
-	Email       *string `json:"email,omitempty"`
-	FullName    string  `json:"full_name"`
-	AvatarURL   *string `json:"avatar_url,omitempty"`
-	IsVerified  bool    `json:"is_verified"`
-	CreatedAt   int64   `json:"created_at"`
-	UpdatedAt   int64   `json:"updated_at"`
-	LastLoginAt *int64  `json:"last_login_at,omitempty"`
+	UserID     uint    `json:"user_id"`
+	Phone      string  `json:"phone"`
+	Email      *string `json:"email,omitempty"`
+	FullName   string  `json:"full_name"`
+	AvatarURL  *string `json:"avatar_url,omitempty"`
+	IsVerified bool    `json:"is_verified"`
+	DisplayName string `json:"display_name"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	Bio         string `json:"bio"`
+	AddressLine string `json:"address_line"`
+	Province    string `json:"province"`
+	PostalCode  string `json:"postal_code"`
+	Phone2      string `json:"phone2"` // ถ้าอยากคง phone เดิมไว้ในหัว, ตัวนี้เก็บเบอร์โปรไฟล์ (หรือจะใช้ key เดิม "phone" ก็ได้ — เลือกอย่างใดอย่างหนึ่ง)
+
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+	LastLoginAt *int64 `json:"last_login_at,omitempty"`
 }
 
 type ShareLinkResponse struct {

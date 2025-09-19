@@ -26,7 +26,7 @@ func Setup(e *echo.Echo, d app.Deps) {
 
 	// เรียกใช้ routers อื่น ๆ ใต้ v1 (protected)
 	routes.RegisterBookingRoutes(v1, d)
-	routes.RegisterPostRoutes(v1, d)
+	routes.RegisterPostRoutes(v1, d.DB)
 	routes.RegisterPostDetailRoutes(v1, d)
 	routes.RegisterCommentRoutes(v1, d)
 	routes.RegisterLikeRoutes(v1, d)

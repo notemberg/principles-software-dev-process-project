@@ -1,19 +1,26 @@
 package routes
 
 import (
-	"net/http"
-
+	postpkg "github.com/RathaTart/FoodBridge/pkg/post"
 	"github.com/labstack/echo/v4"
-	"github.com/RathaTart/FoodBridge/app"
+	"gorm.io/gorm"
 )
 
-func RegisterPostRoutes(v1 *echo.Group, d app.Deps) {
-	r := v1.Group("/posts")
+func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
+	repo := postpkg.NewRepository(db)
+	svc  := postpkg.NewService(repo)
+	ctrl := postpkg.NewController(svc)
 
-	r.GET("", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, echo.Map{
-			"feature": "post",
-			"items":   []any{},
-		})
-	})
+	// Post
+	g.POST  ("/posts",               ctrl.Create)
+	g.GET   ("/posts",               ctrl.List)
+	g.GET   ("/posts/:post_id",      ctrl.GetByID)
+	g.PUT   ("/posts/:post_id",      ctrl.Update)
+	g.DELETE("/posts/:post_id",      ctrl.Delete)
+
+	// PostDetail
+	g.POST  ("/posts/:post_id/details",            ctrl.CreateDetail)
+	g.GET   ("/posts/:post_id/details",            ctrl.ListDetails)
+	g.PUT   ("/posts/:post_id/details/:detail_id", ctrl.UpdateDetail)
+	g.DELETE("/posts/:post_id/details/:detail_id", ctrl.DeleteDetail)
 }

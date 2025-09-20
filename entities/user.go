@@ -1,12 +1,33 @@
 package entities
 
-import "time"
+import (
+	"time"
+)
 
 type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserName  string    `gorm:"size:50;uniqueIndex" json:"userName"`
-	FullName  string    `gorm:"size:100" json:"fullName"`
-	Phone     string    `gorm:"size:20" json:"phone"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	UserID       uint    `gorm:"primaryKey"`
+	Phone        string  `gorm:"uniqueIndex"`
+	Email        *string `gorm:"uniqueIndex"`
+	PasswordHash string
+
+	FullName   string
+	AvatarURL  *string
+	IsVerified bool
+
+	DisplayName string `gorm:"type:varchar(100)"`
+	FirstName   string `gorm:"type:varchar(100)"`
+	LastName    string `gorm:"type:varchar(100)"`
+	Bio         string `gorm:"type:text"`
+	AddressLine string `gorm:"type:varchar(255)"`
+	Province    string `gorm:"type:varchar(100)"`
+	PostalCode  string `gorm:"type:varchar(10)"`
+	Phone2      string `gorm:"type:varchar(32)"` // เบอร์ในโปรไฟล์ (ถ้าต้องแยกจาก phone login)
+
+	Role string `gorm:"type:varchar(20);not null;default:'USER'"`
+
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	LastLoginAt *time.Time
 }
+
+func (User) TableName() string { return "users" }

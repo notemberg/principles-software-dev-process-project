@@ -51,6 +51,7 @@ func main() {
 		&entities.PostDetail{},
 		&entities.Report{},
 		&entities.Verification{},
+		&entities.Booking{},
 	); err != nil {
 		log.Fatal("auto-migrate failed: ", err)
 	}
@@ -84,7 +85,7 @@ func main() {
 	routes.RegisterPostRoutes(protected, db)
 	routes.RegisterReportRoutes(protected, db)
 	routes.RegisterVerificationRoutes(protected, db)
-	// routes.RegisterBookingRoutes(protected, db)
+	routes.RegisterBookingRoutes(protected, db)
 	// routes.RegisterPostDetailRoutes(protected, db)
 	// routes.RegisterCommentRoutes(protected, db)
 

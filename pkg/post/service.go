@@ -1,6 +1,7 @@
 package post
 
 import "github.com/RathaTart/FoodBridge/dto"
+import "time"
 
 type Service interface {
 	// Post
@@ -15,4 +16,12 @@ type Service interface {
 	UpdateDetail(uid, postID, detailID uint, req dto.UpdatePostDetailRequest) (*dto.PostDetailResponse, error)
 	DeleteDetail(uid, postID, detailID uint) error
 	ListDetails(uid, postID uint) ([]dto.PostDetailResponse, error)
+}
+
+type Config struct {
+	HoldTTL      time.Duration
+	QRTokenTTL   time.Duration
+	QRSecret     []byte
+	DayTZ        *time.Location // default: time.Local (Asia/Bangkok for you)
+	DailyLimit   int            // default: 1
 }

@@ -8,12 +8,13 @@ import (
 )
 
 func RegisterBookingRoutes(protected *echo.Group, db *gorm.DB) {
-	// build repo -> service -> controller
 	repo := booking.NewGormRepo(db)
-	svc  := booking.NewService(repo, booking.Config{}) // defaults are fine
+	svc  := booking.NewService(repo, booking.Config{}) // set secrets in bootstrap
 	ctrl := booking.NewController(svc)
 
-	// mount under /api/v1/bookings
 	bookings := protected.Group("/bookings")
 	ctrl.Register(bookings)
+
+	posts := protected.Group("/posts")
+	ctrl.RegisterUnderPosts(posts)
 }

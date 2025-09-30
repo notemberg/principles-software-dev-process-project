@@ -14,6 +14,7 @@ type Booking struct {
 	ExpireAt       *time.Time             `json:"expire_at,omitempty"`
 	CreatedAt      time.Time              `json:"created_at"`
 	QRToken        *string                `json:"qr_token,omitempty"`
+	QueuePos      *int                   `json:"queue_pos,omitempty"`
 }
 
 type UpdateStatusRequest struct {
@@ -36,7 +37,8 @@ func FromEntity(b *entities.Booking) Booking {
 		Status:         b.Status,
 		ExpireAt:       b.ExpireAt,
 		CreatedAt:      b.CreatedAt,
-		QRToken:        b.QRToken,
+		QRToken:		b.QRToken,
+		QueuePos:		b.QueuePos,
 	}
 }
 

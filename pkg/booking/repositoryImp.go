@@ -2,95 +2,121 @@ package booking
 
 import (
 	"context"
-	"errors"
+	"time"
 
-	"github.com/RathaTart/FoodBridge/entities"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/RathaTart/FoodBridge/entities"
 )
 
-type GormRepo struct{ db *gorm.DB }
+type gormRepo struct{ db *gorm.DB }
 
-func NewGormRepo(db *gorm.DB) *GormRepo { return &GormRepo{db: db} }
+func NewGormRepo(db *gorm.DB) Repo { return &gormRepo{db: db} }
 
-func (r *GormRepo) WithTx(ctx context.Context, fn func(Repo) error) error {
+func (r *gormRepo) WithTx(ctx context.Context, fn func(Repo) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(&GormRepo{db: tx})
+		return fn(&gormRepo{db: tx})
 	})
 }
 
-type postDetailRow struct {
-	PostID       int64 `gorm:"column:post_id;primaryKey"`
-	QtyAvailable int   `gorm:"column:qty_available"`
-}
-func (postDetailRow) TableName() string { return "post_details" }
-
-func (r *GormRepo) LockPostDetail(ctx context.Context, postID int64) (*StockView, error) {
-	var row postDetailRow
-	err := r.db.WithContext(ctx).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("post_id = ?", postID).
-		Select("post_id, qty_available").
-		Take(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, gorm.ErrRecordNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &StockView{PostID: row.PostID, QtyAvailable: row.QtyAvailable}, nil
-}
-
-func (r *GormRepo) DecrementQty(ctx context.Context, postID int64, n int) error {
+func (r *gormRepo) TryReserveStock(ctx context.Context, postID int64) (bool, error) {
 	res := r.db.WithContext(ctx).Exec(
-		"UPDATE post_details SET qty_available = qty_available - ? WHERE post_id = ? AND qty_available >= ?",
-		n, postID, n,
+		`UPDATE posts SET quantity = quantity - 1
+    	WHERE post_id = ? AND quantity > 0`,
+		postID,
 	)
 	if res.Error != nil {
-		return res.Error
+		return false, res.Error
 	}
-	if res.RowsAffected == 0 {
-		return errors.New("out_of_stock")
-	}
-	return nil
+	return res.RowsAffected == 1, nil
 }
 
-func (r *GormRepo) IncrementQty(ctx context.Context, postID int64, n int) error {
-	return r.db.WithContext(ctx).Exec(
-		"UPDATE post_details SET qty_available = qty_available + ? WHERE post_id = ?",
-		n, postID,
-	).Error
+func (r *gormRepo) DecrementQty(ctx context.Context, postID int64, n int) error {
+	return r.db.WithContext(ctx).Exec(`UPDATE posts SET quantity = quantity - ? WHERE post_id = ?`, n, postID).Error
+}
+func (r *gormRepo) IncrementQty(ctx context.Context, postID int64, n int) error {
+	return r.db.WithContext(ctx).Exec(`UPDATE posts SET quantity = quantity + ? WHERE post_id = ?`, n, postID).Error
 }
 
-func (r *GormRepo) CreateBooking(ctx context.Context, b *entities.Booking) error {
+func (r *gormRepo) CreateBooking(ctx context.Context, b *entities.Booking) error {
 	return r.db.WithContext(ctx).Create(b).Error
 }
-
-func (r *GormRepo) UpdateBooking(ctx context.Context, b *entities.Booking) error {
-	return r.db.WithContext(ctx).Save(b).Error
+func (r *gormRepo) UpdateBooking(ctx context.Context, b *entities.Booking) error {
+	return r.db.WithContext(ctx).Model(&entities.Booking{}).
+		Where("booking_id = ?", b.BookingID).
+		Updates(b).Error
+}
+func (r *gormRepo) GetBookingByID(ctx context.Context, id int64, forUpdate bool) (*entities.Booking, error) {
+	var b entities.Booking
+	tx := r.db.WithContext(ctx).Where("booking_id = ?", id)
+	if forUpdate {
+		tx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	if err := tx.First(&b).Error; err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+func (r *gormRepo) ListBookings(ctx context.Context, f Filter) ([]entities.Booking, error) {
+	q := r.db.WithContext(ctx).Model(&entities.Booking{})
+	if f.PostID != nil {
+		q = q.Where("post_id = ?", *f.PostID)
+	}
+	if f.ReceiverUserID != nil {
+		q = q.Where("receiver_user_id = ?", *f.ReceiverUserID)
+	}
+	if f.Status != nil {
+		q = q.Where("status = ?", *f.Status)
+	}
+	var out []entities.Booking
+	if err := q.Order("created_at DESC").Find(&out).Error; err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
-func (r *GormRepo) GetBookingByID(ctx context.Context, id int64, forUpdate bool) (*entities.Booking, error) {
-	var b entities.Booking
-	q := r.db.WithContext(ctx).Where("booking_id = ?", id)
-	if forUpdate {
-		q = q.Clauses(clause.Locking{Strength: "UPDATE"})
+func (r *gormRepo) NextQueuePos(ctx context.Context, postID int64) (int, error) {
+	var max int
+	if err := r.db.WithContext(ctx).
+		Raw(`SELECT COALESCE(MAX(queue_pos),0) FROM bookings WHERE post_id = ? AND status = 'QUEUED'`, postID).
+		Scan(&max).Error; err != nil {
+		return 0, err
 	}
-	if err := q.First(&b).Error; err != nil {
+	return max + 1, nil
+}
+
+func (r *gormRepo) FindNextQueued(ctx context.Context, postID int64) (*entities.Booking, error) {
+	var b entities.Booking
+	err := r.db.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+		Where("post_id = ? AND status = 'QUEUED'", postID).
+		Order("queue_pos ASC, created_at ASC").
+		First(&b).Error
+	if err != nil {
 		return nil, err
 	}
 	return &b, nil
 }
 
-func (r *GormRepo) ListBookings(ctx context.Context, f Filter) ([]entities.Booking, error) {
-	var out []entities.Booking
-	q := r.db.WithContext(ctx).Model(&entities.Booking{})
-	if f.PostID != nil           { q = q.Where("post_id = ?", *f.PostID) }
-	if f.ReceiverUserID != nil   { q = q.Where("receiver_user_id = ?", *f.ReceiverUserID) }
-	if f.Status != nil           { q = q.Where("status = ?", *f.Status) }
-	if f.ExpiredBefore != nil    { q = q.Where("expire_at IS NOT NULL AND expire_at < ?", *f.ExpiredBefore) }
-	if f.Limit > 0               { q = q.Limit(f.Limit) }
-	if f.Offset > 0              { q = q.Offset(f.Offset) }
-	if err := q.Order("booking_id DESC").Find(&out).Error; err != nil { return nil, err }
-	return out, nil
+func (r *gormRepo) CountActiveTodayByUser(ctx context.Context, userID int64, dayStart, dayEnd time.Time) (int64, error) {
+	var cnt int64
+	err := r.db.WithContext(ctx).
+		Model(&entities.Booking{}).
+		Where("receiver_user_id = ?", userID).
+		Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).
+		Where("status IN ('PENDING','QUEUED')").
+		Count(&cnt).Error
+	return cnt, err
 }
+
+func (r *gormRepo) GetPostOwnerID(ctx context.Context, postID int64) (int64, error) {
+    var ownerID int64
+    // If your column is NOT posts.user_id, change it here (e.g., provider_user_id).
+    err := r.db.WithContext(ctx).
+        Raw(`SELECT provider_id FROM posts WHERE post_id = ?`, postID).
+        Scan(&ownerID).Error
+    return ownerID, err
+}
+
+

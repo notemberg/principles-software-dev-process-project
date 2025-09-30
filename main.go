@@ -8,11 +8,13 @@ import (
 	"github.com/RathaTart/FoodBridge/entities"
 	"github.com/RathaTart/FoodBridge/server" // ใช้ AuthMiddleware
 	"github.com/RathaTart/FoodBridge/server/routes"
+	"github.com/RathaTart/FoodBridge/server/bootstrap"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
 )
 
 func buildDSN() string {
@@ -55,6 +57,9 @@ func main() {
 	); err != nil {
 		log.Fatal("auto-migrate failed: ", err)
 	}
+
+	stopWorkers := bootstrap.StartBackgroundWorkers(db)
+	defer stopWorkers()
 
 	// ----- Echo -----
 	e := echo.New()

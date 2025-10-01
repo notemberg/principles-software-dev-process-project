@@ -25,7 +25,7 @@ func Setup(e *echo.Echo, d app.Deps) {
 	v1 := e.Group("", AuthMiddleware())
 
 	// เรียกใช้ routers อื่น ๆ ใต้ v1 (protected)
-	routes.RegisterBookingRoutes(v1, d)
+	routes.RegisterBookingRoutes(v1, d.DB)
 	routes.RegisterPostRoutes(v1, d.DB)
 	routes.RegisterPostDetailRoutes(v1, d)
 	routes.RegisterCommentRoutes(v1, d)

@@ -8,11 +8,13 @@ import (
 	"github.com/RathaTart/FoodBridge/entities"
 	"github.com/RathaTart/FoodBridge/server" // ใช้ AuthMiddleware
 	"github.com/RathaTart/FoodBridge/server/routes"
+	"github.com/RathaTart/FoodBridge/server/bootstrap"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
 )
 
 func buildDSN() string {
@@ -51,9 +53,13 @@ func main() {
 		&entities.PostDetail{},
 		&entities.Report{},
 		&entities.Verification{},
+		&entities.Booking{},
 	); err != nil {
 		log.Fatal("auto-migrate failed: ", err)
 	}
+
+	stopWorkers := bootstrap.StartBackgroundWorkers(db)
+	defer stopWorkers()
 
 	// ----- Echo -----
 	e := echo.New()
@@ -84,7 +90,7 @@ func main() {
 	routes.RegisterPostRoutes(protected, db)
 	routes.RegisterReportRoutes(protected, db)
 	routes.RegisterVerificationRoutes(protected, db)
-	// routes.RegisterBookingRoutes(protected, db)
+	routes.RegisterBookingRoutes(protected, db)
 	// routes.RegisterPostDetailRoutes(protected, db)
 	// routes.RegisterCommentRoutes(protected, db)
 

@@ -1,19 +1,23 @@
+// server/routes/commentRouter.go
 package routes
 
 import (
-	"net/http"
-
+	"github.com/RathaTart/FoodBridge/pkg/comment"
 	"github.com/labstack/echo/v4"
-	"github.com/RathaTart/FoodBridge/app"
+	"gorm.io/gorm"
 )
 
-func RegisterCommentRoutes(v1 *echo.Group, d app.Deps) {
-	r := v1.Group("/comments")
+func RegisterCommentRoutes(protected *echo.Group, db *gorm.DB) {
+	// init deps
+	repo := comment.NewRepository(db)
+	svc  := comment.NewService(db, repo)
+	ctrl := comment.NewController(svc)
 
-	r.GET("", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, echo.Map{
-			"feature": "comment",
-			"items":   []any{},
-		})
-	})
+	// Top-level: PATCH/DELETE /comments/:id
+	comments := protected.Group("/comments")
+	ctrl.RegisterTopLevel(comments)
+
+	// Nested under posts: POST/GET /posts/:post_id/comments
+	posts := protected.Group("/posts")
+	ctrl.RegisterUnderPosts(posts)
 }

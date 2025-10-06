@@ -28,7 +28,7 @@ func Setup(e *echo.Echo, d app.Deps) {
 	routes.RegisterBookingRoutes(v1, d.DB)
 	routes.RegisterPostRoutes(v1, d.DB)
 	routes.RegisterPostDetailRoutes(v1, d)
-	routes.RegisterCommentRoutes(v1, d)
+	routes.RegisterCommentRoutes(v1, d.DB)
 	routes.RegisterLikeRoutes(v1, d)
 	routes.RegisterLocationRoutes(v1, d)
 	routes.RegisterNotificationRoutes(v1, d)

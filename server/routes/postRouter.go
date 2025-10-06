@@ -38,5 +38,4 @@ func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
 	lSvc  := like.NewService(db, lRepo)
 	lCtrl := like.NewController(lSvc)
 	lCtrl.RegisterUnderPosts(posts) // registers /posts/:post_id/like(s)
-
 }

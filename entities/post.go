@@ -52,5 +52,7 @@ type Post struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	LikeCount int `gorm:"default:0"`
+	LikeCount   int `gorm:"default:0"`
+	CommentCount int `gorm:"default:0"` // visible comments only
+
 }

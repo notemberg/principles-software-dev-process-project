@@ -3,6 +3,7 @@ package routes
 import (
 	postpkg "github.com/RathaTart/FoodBridge/pkg/post"
 	"github.com/RathaTart/FoodBridge/pkg/booking"
+	"github.com/RathaTart/FoodBridge/pkg/like"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
@@ -31,4 +32,11 @@ func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
 	bSvc  := booking.NewService(bRepo, booking.Config{})
 	bCtrl := booking.NewController(bSvc)
 	bCtrl.RegisterUnderPosts(posts)
+
+	// Likes under /posts
+	lRepo := like.NewRepository(db)
+	lSvc  := like.NewService(db, lRepo)
+	lCtrl := like.NewController(lSvc)
+	lCtrl.RegisterUnderPosts(posts) // registers /posts/:post_id/like(s)
+
 }

@@ -54,6 +54,7 @@ func main() {
 		&entities.Report{},
 		&entities.Verification{},
 		&entities.Booking{},
+		&entities.PostLike{},
 	); err != nil {
 		log.Fatal("auto-migrate failed: ", err)
 	}

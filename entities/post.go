@@ -51,4 +51,6 @@ type Post struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	LikeCount int `gorm:"default:0"`
 }

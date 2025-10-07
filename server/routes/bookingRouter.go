@@ -1,19 +1,20 @@
 package routes
 
 import (
-	"net/http"
-
 	"github.com/labstack/echo/v4"
-	"github.com/RathaTart/FoodBridge/app"
+	"gorm.io/gorm"
+
+	"github.com/RathaTart/FoodBridge/pkg/booking"
 )
 
-func RegisterBookingRoutes(v1 *echo.Group, d app.Deps) {
-	r := v1.Group("/bookings")
+func RegisterBookingRoutes(protected *echo.Group, db *gorm.DB) {
+	repo := booking.NewGormRepo(db)
+	svc  := booking.NewService(repo, booking.Config{}) // set secrets in bootstrap
+	ctrl := booking.NewController(svc)
 
-	r.GET("", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, echo.Map{
-			"feature": "booking",
-			"items":   []any{},
-		})
-	})
+	bookings := protected.Group("/bookings")
+	ctrl.Register(bookings)
+
+	posts := protected.Group("/posts")
+	ctrl.RegisterUnderPosts(posts)
 }

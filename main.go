@@ -98,4 +98,6 @@ func main() {
 	port := getenv("PORT", "1323")
 	e.Logger.Infof("Starting server on :%s", port)
 	e.Logger.Fatal(e.Start(":" + port))
+
+	// ----- Close DB -----
 }

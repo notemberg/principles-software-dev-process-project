@@ -27,6 +27,10 @@ type Repo interface {
 	GetBookingByID(ctx context.Context, id int64, forUpdate bool) (*entities.Booking, error)
 	ListBookings(ctx context.Context, f Filter) ([]entities.Booking, error)
 
+	// QR code
+	GetBookingByQRToken(ctx context.Context, token string, forUpdate bool) (*entities.Booking, error)
+	SetBookingQRToken(ctx context.Context, id int64, token string) error
+
 	// Queue + daily limit
 	NextQueuePos(ctx context.Context, postID int64) (int, error)
 	FindNextQueued(ctx context.Context, postID int64) (*entities.Booking, error)

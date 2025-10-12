@@ -76,6 +76,25 @@ func (r *gormRepo) ListBookings(ctx context.Context, f Filter) ([]entities.Booki
 	return out, nil
 }
 
+func (r *gormRepo) GetBookingByQRToken(ctx context.Context, token string, forUpdate bool) (*entities.Booking, error) {
+	var b entities.Booking
+	tx := r.db.WithContext(ctx).Where("qr_token = ?", token)
+	if forUpdate {
+		tx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	if err := tx.First(&b).Error; err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+func (r *gormRepo) SetBookingQRToken(ctx context.Context, id int64, token string) error {
+	return r.db.WithContext(ctx).
+		Model(&entities.Booking{}).
+		Where("booking_id = ?", id).
+		Update("qr_token", token).Error
+}
+
 func (r *gormRepo) NextQueuePos(ctx context.Context, postID int64) (int, error) {
 	var max int
 	if err := r.db.WithContext(ctx).

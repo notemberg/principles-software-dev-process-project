@@ -21,7 +21,7 @@ type Booking struct {
 	ExpireAt       *time.Time    `gorm:"column:expire_at" json:"expire_at,omitempty"`
 	CreatedAt      time.Time     `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt      time.Time     `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	QRToken        *string       `gorm:"column:qr_token" json:"qr_token,omitempty"`
+	QRToken        *string       `gorm:"column:qr_token;uniqueIndex" json:"qr_token,omitempty"`
 	ExpiredAt      *time.Time    `gorm:"column:expired_at" json:"expired_at,omitempty"`
 }
 

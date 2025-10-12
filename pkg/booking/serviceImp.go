@@ -352,19 +352,48 @@ func (s *service) Complete(ctx context.Context, id int64) error {
 
 // ===== QR HMAC =====
 
-func (s *service) IssueQR(ctx context.Context, id int64, ttl time.Duration) (string, error) {
-	if ttl <= 0 {
-		ttl = s.cfg.QRTokenTTL
-	}
-	exp := time.Now().Add(ttl).Unix()
-	payload := fmt.Sprintf("%d:%d", id, exp)
+// create a deterministic, stable token per booking
+func (s *service) makeStableQR(bookingID int64, createdAt time.Time) string {
+	payload := fmt.Sprintf("%d:%d", bookingID, createdAt.Unix()) // stable inputs
 	mac := hmac.New(sha256.New, s.cfg.QRSecret)
 	mac.Write([]byte(payload))
 	sig := mac.Sum(nil)
-	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." +
+		base64.RawURLEncoding.EncodeToString(sig)
+}
+
+func (s *service) IssueQR(ctx context.Context, id int64, _ time.Duration) (string, error) {
+	b, err := s.repo.GetBookingByID(ctx, id, false)
+	if err != nil {
+		return "", err
+	}
+	// if already issued, return the stored one
+	if b.QRToken != nil && *b.QRToken != "" {
+		return *b.QRToken, nil
+	}
+	// generate once and persist
+	token := s.makeStableQR(b.BookingID, b.CreatedAt)
+	if err := s.repo.SetBookingQRToken(ctx, b.BookingID, token); err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 func (s *service) ScanQR(ctx context.Context, token string) (*entities.Booking, error) {
+	// 1) First, try the stable stored token
+	if b, err := s.repo.GetBookingByQRToken(ctx, token, false); err == nil && b != nil {
+		// server-side safety gates (prevents replay abuse)
+		now := time.Now().In(s.cfg.DayTZ)
+		if b.Status != entities.BookingPending {
+			return nil, fmt.Errorf("invalid_status")
+		}
+		if b.ExpireAt != nil && now.After(*b.ExpireAt) {
+			return nil, fmt.Errorf("booking_expired")
+		}
+		return b, nil
+	}
+
+	// 2) Backward-compat: accept old short-lived tokens (bookingID:exp.sig)
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("bad_qr")
@@ -377,13 +406,11 @@ func (s *service) ScanQR(ctx context.Context, token string) (*entities.Booking, 
 	if err != nil {
 		return nil, fmt.Errorf("bad_qr")
 	}
-
 	mac := hmac.New(sha256.New, s.cfg.QRSecret)
 	mac.Write(raw)
 	if !hmac.Equal(sig, mac.Sum(nil)) {
 		return nil, fmt.Errorf("bad_qr_sig")
 	}
-
 	payload := string(raw) // bookingID:exp
 	colon := strings.IndexByte(payload, ':')
 	if colon < 0 {

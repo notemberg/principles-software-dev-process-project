@@ -24,4 +24,8 @@ type Service interface {
 
 	IssueQR(ctx context.Context, id int64, ttl time.Duration) (string, error)
 	ScanQR(ctx context.Context, token string) (*entities.Booking, error)
+
+	// ExpireSweep scans for expired pending bookings and transitions them to EXPIRED,
+	// promoting queued bookings or returning stock as appropriate. It processes up to 'max' items per call.
+	ExpireSweep(ctx context.Context, max int) error
 }

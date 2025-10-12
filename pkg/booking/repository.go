@@ -33,4 +33,8 @@ type Repo interface {
 	CountActiveTodayByUser(ctx context.Context, userID int64, dayStart, dayEnd time.Time) (int64, error)
 
 	GetPostOwnerID(ctx context.Context, postID int64) (int64, error)
+
+	// Expiration sweep helpers
+	// Return a batch of booking IDs that are PENDING and expired at or before the given time.
+	ListExpiredPendingIDs(ctx context.Context, before time.Time, limit int) ([]int64, error)
 }

@@ -5,11 +5,18 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/RathaTart/FoodBridge/pkg/booking"
+	"github.com/RathaTart/FoodBridge/pkg/notification"
 )
 
 func RegisterBookingRoutes(protected *echo.Group, db *gorm.DB) {
 	repo := booking.NewGormRepo(db)
-	svc  := booking.NewService(repo, booking.Config{}) // set secrets in bootstrap
+
+	// Notification publisher
+	notifRepo := notification.NewRepository(db)
+	pub := notification.NewPublisher(notifRepo)
+
+	// Pass pub into the service
+	svc := booking.NewService(repo, booking.Config{}, pub)
 	ctrl := booking.NewController(svc)
 
 	bookings := protected.Group("/bookings")

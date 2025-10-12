@@ -4,16 +4,17 @@ import (
 	postpkg "github.com/RathaTart/FoodBridge/pkg/post"
 	"github.com/RathaTart/FoodBridge/pkg/booking"
 	"github.com/RathaTart/FoodBridge/pkg/like"
+	"github.com/RathaTart/FoodBridge/pkg/notification"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
 
 func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
+	// Post
 	repo := postpkg.NewRepository(db)
 	svc  := postpkg.NewService(repo)
 	ctrl := postpkg.NewController(svc)
 
-	// Post
 	g.POST  ("/posts",               ctrl.Create)
 	g.GET   ("/posts",               ctrl.List)
 	g.GET   ("/posts/:post_id",      ctrl.GetByID)
@@ -26,10 +27,15 @@ func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
 	g.PUT   ("/posts/:post_id/details/:detail_id", ctrl.UpdateDetail)
 	g.DELETE("/posts/:post_id/details/:detail_id", ctrl.DeleteDetail)
 
-	// Booking
+	// Booking under /posts
 	posts := g.Group("/posts")
 	bRepo := booking.NewGormRepo(db)
-	bSvc  := booking.NewService(bRepo, booking.Config{})
+	
+	// inject notification publisher for these booking routes too
+	notifRepo := notification.NewRepository(db)
+	pub := notification.NewPublisher(notifRepo)
+
+	bSvc  := booking.NewService(bRepo, booking.Config{}, pub)
 	bCtrl := booking.NewController(bSvc)
 	bCtrl.RegisterUnderPosts(posts)
 
@@ -37,5 +43,5 @@ func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
 	lRepo := like.NewRepository(db)
 	lSvc  := like.NewService(db, lRepo)
 	lCtrl := like.NewController(lSvc)
-	lCtrl.RegisterUnderPosts(posts) // registers /posts/:post_id/like(s)
+	lCtrl.RegisterUnderPosts(posts)
 }

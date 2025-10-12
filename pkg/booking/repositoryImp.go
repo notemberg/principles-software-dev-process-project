@@ -111,12 +111,38 @@ func (r *gormRepo) CountActiveTodayByUser(ctx context.Context, userID int64, day
 }
 
 func (r *gormRepo) GetPostOwnerID(ctx context.Context, postID int64) (int64, error) {
-    var ownerID int64
-    // If your column is NOT posts.user_id, change it here (e.g., provider_user_id).
-    err := r.db.WithContext(ctx).
-        Raw(`SELECT provider_id FROM posts WHERE post_id = ?`, postID).
-        Scan(&ownerID).Error
-    return ownerID, err
+	var ownerID int64
+	// If your column is NOT posts.user_id, change it here (e.g., provider_user_id).
+	err := r.db.WithContext(ctx).
+		Raw(`SELECT provider_id FROM posts WHERE post_id = ?`, postID).
+		Scan(&ownerID).Error
+	return ownerID, err
 }
 
-
+// ListExpiredPendingIDs returns IDs of bookings where status=PENDING and expire_at <= before.
+func (r *gormRepo) ListExpiredPendingIDs(ctx context.Context, before time.Time, limit int) ([]int64, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.WithContext(ctx).
+		Model(&entities.Booking{}).
+		Select("booking_id").
+		Where("status = ?", entities.BookingPending).
+		Where("expire_at IS NOT NULL AND expire_at <= ?", before).
+		Order("expire_at ASC").
+		Limit(limit).
+		Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}

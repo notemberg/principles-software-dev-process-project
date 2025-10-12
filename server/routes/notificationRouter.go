@@ -1,19 +1,17 @@
 package routes
 
 import (
-	"net/http"
+    "github.com/labstack/echo/v4"
+    "gorm.io/gorm"
 
-	"github.com/labstack/echo/v4"
-	"github.com/RathaTart/FoodBridge/app"
+    "github.com/RathaTart/FoodBridge/pkg/notification"
 )
 
-func RegisterNotificationRoutes(v1 *echo.Group, d app.Deps) {
-	r := v1.Group("/notifications")
+func RegisterNotificationRoutes(protected *echo.Group, db *gorm.DB) {
+    repo := notification.NewRepository(db)
+    svc  := notification.NewService(repo)
+    ctrl := notification.NewController(svc)
 
-	r.GET("", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, echo.Map{
-			"feature": "notification",
-			"items":   []any{},
-		})
-	})
+    g := protected.Group("/notifications")
+    ctrl.Register(g)
 }

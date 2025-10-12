@@ -3,10 +3,12 @@ package comment
 import (
 	"context"
 	"errors"
+	"log"
 
 	"github.com/RathaTart/FoodBridge/dto"
 	"github.com/RathaTart/FoodBridge/entities"
 	"gorm.io/gorm"
+	notif "github.com/RathaTart/FoodBridge/pkg/notification"
 )
 
 type service struct{ db *gorm.DB; repo Repo }
@@ -31,14 +33,23 @@ func (s *service) Create(ctx context.Context, postID, userID uint, req dto.Creat
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		r := &gormRepo{db: tx}
 
-		// if parent provided, optionally validate it belongs to same post
+		// Validate parent (if provided)
+		var parentUserID *uint
 		if req.ParentID != nil {
 			par, err := r.FindByID(ctx, *req.ParentID)
-			if err != nil { return err }
-			if par.PostID != postID { return errors.New("invalid parent_id: different post") }
-			if par.Status != "visible" { return errors.New("invalid parent_id: not visible") }
+			if err != nil {
+				return err
+			}
+			if par.PostID != postID {
+				return errors.New("invalid parent_id: different post")
+			}
+			if par.Status != "visible" {
+				return errors.New("invalid parent_id: not visible")
+			}
+			parentUserID = &par.UserID
 		}
 
+		// Create comment
 		pc := &entities.PostComment{
 			PostID:   postID,
 			UserID:   userID,
@@ -46,10 +57,35 @@ func (s *service) Create(ctx context.Context, postID, userID uint, req dto.Creat
 			Body:     req.Body,
 			Status:   "visible",
 		}
-		if err := r.Create(ctx, pc); err != nil { return err }
+		if err := r.Create(ctx, pc); err != nil {
+			return err
+		}
 
-		// increment post counter
-		if err := r.IncPostCommentCount(ctx, postID, +1); err != nil { return err }
+		// Increment post comment counter
+		if err := r.IncPostCommentCount(ctx, postID, +1); err != nil {
+			return err
+		}
+
+		// Get post owner (provider_id)
+		pid, err := getPostProviderID(ctx, tx, postID)
+		if err != nil {
+			// log but continue; comment should still succeed
+			log.Printf("comment.Create: getPostProviderID(%d) failed: %v", postID, err)
+		}
+
+		// Notify post owner if commenter is not the owner
+		if pid != 0 && pid != userID {
+			_ = notif.NotifyTx(ctx, tx, int64(pid), "comment.new",
+				"new comment on your post", req.Body,
+				map[string]any{"post_id": postID, "comment_id": pc.CommentID, "parent_id": pc.ParentID})
+		}
+
+		// If reply: notify parent comment owner (not self, not duplicate to post owner)
+		if parentUserID != nil && *parentUserID != userID && *parentUserID != pid {
+			_ = notif.NotifyTx(ctx, tx, int64(*parentUserID), "comment.reply",
+				"new reply to your comment", req.Body,
+				map[string]any{"post_id": postID, "comment_id": pc.CommentID, "parent_id": pc.ParentID})
+		}
 
 		out = toCommentResponse(*pc)
 		return nil
@@ -62,16 +98,26 @@ func (s *service) Update(ctx context.Context, commentID, userID uint, req dto.Up
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		r := &gormRepo{db: tx}
 		pc, err := r.FindByID(ctx, commentID)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		// only owner can edit
-		if pc.UserID != userID { return errors.New("forbidden: not owner") }
-		if pc.Status != "visible" { return errors.New("cannot edit deleted comment") }
+		if pc.UserID != userID {
+			return errors.New("forbidden: not owner")
+		}
+		if pc.Status != "visible" {
+			return errors.New("cannot edit deleted comment")
+		}
 
-		if err := r.UpdateBody(ctx, commentID, req.Body); err != nil { return err }
+		if err := r.UpdateBody(ctx, commentID, req.Body); err != nil {
+			return err
+		}
 
 		// reload to get UpdatedAt
 		pc2, err := r.FindByID(ctx, commentID)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		out = toCommentResponse(*pc2)
 		return nil
 	})
@@ -83,29 +129,40 @@ func (s *service) Delete(ctx context.Context, commentID, userID uint) error {
 		r := &gormRepo{db: tx}
 
 		pc, err := r.FindByID(ctx, commentID)
-		if err != nil { return err }
-		if pc.UserID != userID { return errors.New("forbidden: not owner") }
+		if err != nil {
+			return err
+		}
+		if pc.UserID != userID {
+			return errors.New("forbidden: not owner")
+		}
 
 		postID, affected, err := r.SoftDeleteCascade(ctx, commentID)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		if affected > 0 {
-			if err := r.IncPostCommentCount(ctx, postID, -int(affected)); err != nil { return err }
+			if err := r.IncPostCommentCount(ctx, postID, -int(affected)); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
 }
 
-
 func (s *service) List(ctx context.Context, postID uint, parentID *uint, limit, offset int, includeChildren bool) (*dto.ListCommentsResponse, error) {
 	rows, total, err := s.repo.ListByPost(ctx, postID, parentID, limit, offset)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	out := make([]dto.CommentResponse, 0, len(rows))
 	topIDs := make([]uint, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, toCommentResponse(r))
-		if parentID == nil { topIDs = append(topIDs, r.CommentID) }
+		if parentID == nil {
+			topIDs = append(topIDs, r.CommentID)
+		}
 	}
 
 	resp := &dto.ListCommentsResponse{
@@ -119,7 +176,9 @@ func (s *service) List(ctx context.Context, postID uint, parentID *uint, limit, 
 	}
 	if includeChildren && parentID == nil {
 		all, err := s.repo.CountVisibleByPost(ctx, postID)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		resp.Total = all
 	}
 	// Build nested tree only when listing top-level comments
@@ -140,13 +199,19 @@ func (s *service) List(ctx context.Context, postID uint, parentID *uint, limit, 
 		cur := queueParents
 		for len(cur) > 0 {
 			children, err := (&gormRepo{db: s.db}).listChildrenByParents(ctx, postID, cur)
-			if err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
 
 			next := make([]uint, 0)
 			for _, ch := range children {
-				if ch.ParentID == nil { continue }
+				if ch.ParentID == nil {
+					continue
+				}
 				parentNode := nodes[*ch.ParentID]
-				if parentNode == nil { continue }
+				if parentNode == nil {
+					continue
+				}
 
 				childNode := dto.CommentNode{Comment: toCommentResponse(ch)}
 				parentNode.Replies = append(parentNode.Replies, childNode)
@@ -159,11 +224,20 @@ func (s *service) List(ctx context.Context, postID uint, parentID *uint, limit, 
 			cur = next
 		}
 
-		// ✅ attach the built tree to the response
+		// attach the built tree to the response
 		resp.Replies = tree
 	}
 
 	return resp, nil
 }
 
-
+// Helper: read provider_id from posts safely (matches your booking repo usage)
+func getPostProviderID(ctx context.Context, tx *gorm.DB, postID uint) (uint, error) {
+	var pid uint
+	if err := tx.WithContext(ctx).
+		Raw(`SELECT provider_id FROM posts WHERE post_id = ?`, postID).
+		Scan(&pid).Error; err != nil {
+		return 0, err
+	}
+	return pid, nil
+}

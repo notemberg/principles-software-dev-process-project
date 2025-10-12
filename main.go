@@ -56,6 +56,7 @@ func main() {
 		&entities.Booking{},
 		&entities.PostLike{},
 		&entities.PostComment{},
+		&entities.Notification{},
 	); err != nil {
 		log.Fatal("auto-migrate failed: ", err)
 	}
@@ -95,6 +96,7 @@ func main() {
 	routes.RegisterBookingRoutes(protected, db)
 	// routes.RegisterPostDetailRoutes(protected, db)
 	routes.RegisterCommentRoutes(protected, db)
+	routes.RegisterNotificationRoutes(protected, db)
 
 	// Debug routes (optional)
 	fmt.Println(">>> ROUTER SETUP: dumping routes")

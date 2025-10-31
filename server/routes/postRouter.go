@@ -5,6 +5,7 @@ import (
 	"github.com/RathaTart/FoodBridge/pkg/booking"
 	"github.com/RathaTart/FoodBridge/pkg/like"
 	"github.com/RathaTart/FoodBridge/pkg/notification"
+	"github.com/RathaTart/FoodBridge/server/bootstrap"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
@@ -35,7 +36,7 @@ func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
 	notifRepo := notification.NewRepository(db)
 	pub := notification.NewPublisher(notifRepo)
 
-	bSvc  := booking.NewService(bRepo, booking.Config{}, pub)
+	bSvc  := booking.NewService(bRepo, bootstrap.BookingConfig(), pub)
 	bCtrl := booking.NewController(bSvc)
 	bCtrl.RegisterUnderPosts(posts)
 

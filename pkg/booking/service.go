@@ -28,4 +28,6 @@ type Service interface {
 	// ExpireSweep scans for expired pending bookings and transitions them to EXPIRED,
 	// promoting queued bookings or returning stock as appropriate. It processes up to 'max' items per call.
 	ExpireSweep(ctx context.Context, max int) error
+
+	DailyLimitLeft(ctx context.Context, userID int64, now time.Time) (limit int, used int, left int, start time.Time, end time.Time, err error)
 }

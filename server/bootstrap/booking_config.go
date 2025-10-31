@@ -7,7 +7,7 @@ import (
 
 func BookingConfig() booking.Config {
     return booking.Config{
-        DailyLimit: 4,
+        DailyLimit: 2,
         HoldTTL:    30 * time.Minute,
         QRTokenTTL: 30 * time.Minute,
     }

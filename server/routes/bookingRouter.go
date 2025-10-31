@@ -6,6 +6,7 @@ import (
 
 	"github.com/RathaTart/FoodBridge/pkg/booking"
 	"github.com/RathaTart/FoodBridge/pkg/notification"
+	"github.com/RathaTart/FoodBridge/server/bootstrap"
 )
 
 func RegisterBookingRoutes(protected *echo.Group, db *gorm.DB) {
@@ -16,7 +17,7 @@ func RegisterBookingRoutes(protected *echo.Group, db *gorm.DB) {
 	pub := notification.NewPublisher(notifRepo)
 
 	// Pass pub into the service
-	svc := booking.NewService(repo, booking.Config{}, pub)
+	svc := booking.NewService(repo, bootstrap.BookingConfig(), pub)
 	ctrl := booking.NewController(svc)
 
 	bookings := protected.Group("/bookings")

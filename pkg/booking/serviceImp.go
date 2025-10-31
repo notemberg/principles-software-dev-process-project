@@ -513,3 +513,20 @@ func (s *service) ExpireSweep(ctx context.Context, max int) error {
 	}
 	return nil
 }
+
+func (s *service) DailyLimitLeft(ctx context.Context, userID int64, now time.Time) (int, int, int, time.Time, time.Time, error) {
+	// match your current defaulting (you set 2 in NewService)
+	limit := s.cfg.DailyLimit
+	if limit == 0 {
+		limit = 2
+	}
+	start, end := s.dayBounds(now)
+	n, err := s.repo.CountActiveTodayByUser(ctx, userID, start, end)
+	if err != nil {
+		return 0, 0, 0, time.Time{}, time.Time{}, err
+	}
+	used := int(n)
+	left := limit - used
+	if left < 0 { left = 0 }
+	return limit, used, left, start, end, nil
+}

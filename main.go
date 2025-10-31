@@ -125,7 +125,7 @@ func main() {
 	routes.RegisterPostRoutes(protected, db)
 	routes.RegisterReportRoutes(protected, db)
 	routes.RegisterVerificationRoutes(protected, db)
-	// routes.RegisterBookingRoutes(protected, db)
+	routes.RegisterBookingRoutes(protected, db)
 	// routes.RegisterPostDetailRoutes(protected, db)
 	routes.RegisterCommentRoutes(protected, db)
 	routes.RegisterNotificationRoutes(protected, db)

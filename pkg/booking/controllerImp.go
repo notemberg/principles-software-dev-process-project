@@ -45,9 +45,10 @@ func NewController(svc Service) Controller { return &controller{svc: svc} }
 func (h *controller) Register(g *echo.Group) {
 	g.GET("", h.list)
 	g.GET("/:id", h.get)
-	g.PATCH("/:id", h.patch)     // body: { "status": "CANCELLED" | "COMPLETED" }
-	g.POST("/:id/qr", h.issueQR) // body: { "ttl_seconds": 600 }
-	g.POST("/scan", h.scanQR)    // body: { "token": "..." }
+	g.PATCH("/:id", h.patch)           // {status: CANCELLED|COMPLETED}
+	g.POST("/:id/qr", h.issueQR)       // body: {"ttl_seconds":600}
+	g.POST("/scan", h.scanQR)          // body: {"token":"..."}
+	g.GET("/daily-limit", h.dailyLimit)
 }
 
 func (h *controller) RegisterUnderPosts(posts *echo.Group) {
@@ -117,9 +118,20 @@ func (h *controller) create(c echo.Context) error {
 			}
 		}
 	}
+	uid, err := uidFromCtx(c)
+	if err != nil { return err } // returns 401 with "uid missing" etc.
+	userID := int64(uid)
 
 	b, err := h.svc.Create(c.Request().Context(), postID, uid)
 	if err != nil {
+		if strings.Contains(err.Error(), "cannot_book_own_post") {
+			return c.JSON(http.StatusForbidden, echo.Map{"error": "cannot_book_own_post"})
+		}
+		if strings.Contains(err.Error(), "no_booking_token_left") {
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "no_booking_token_left"})
+		}
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
 		if strings.Contains(err.Error(), "cannot_book_own_post") {
 			return c.JSON(http.StatusForbidden, echo.Map{"error": "cannot_book_own_post"})
 		}
@@ -187,4 +199,39 @@ func (h *controller) scanQR(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, dto.FromEntity(b))
+}
+
+func (h *controller) dailyLimit(c echo.Context) error {
+	uid, err := uidFromCtx(c)
+	if err != nil { return err } // 401
+	limit, used, left, start, end, e := h.svc.DailyLimitLeft(c.Request().Context(), int64(uid), time.Now())
+	if e != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": e.Error()})
+	}
+	return c.JSON(http.StatusOK, dto.DailyLimitResponse{
+		Limit:       limit,
+		UsedToday:   used,
+		LeftToday:   left,
+		WindowStart: start,
+		WindowEnd:   end,
+	})
+}
+
+func uidFromCtx(c echo.Context) (uint, error) {
+	v := c.Get("uid")
+	switch t := v.(type) {
+	case uint:
+		return t, nil
+	case int:
+		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
+		return uint(t), nil
+	case int64:
+		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
+		return uint(t), nil
+	case float64:
+		if t < 0 { return 0, echo.NewHTTPError(http.StatusUnauthorized, "invalid uid") }
+		return uint(t), nil
+	default:
+		return 0, echo.NewHTTPError(http.StatusUnauthorized, "uid missing")
+	}
 }

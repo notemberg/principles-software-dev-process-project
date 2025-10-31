@@ -20,7 +20,13 @@ type Booking struct {
 type UpdateStatusRequest struct {
 	Status entities.BookingStatus `json:"status"`
 }
-
+type DailyLimitResponse struct {
+	Limit       int       `json:"limit"`
+	UsedToday   int       `json:"used_today"`
+	LeftToday   int       `json:"left_today"`
+	WindowStart time.Time `json:"window_start"`
+	WindowEnd   time.Time `json:"window_end"`
+}
 type IssueQRResponse struct {
 	QRToken string `json:"qr_token"`
 }

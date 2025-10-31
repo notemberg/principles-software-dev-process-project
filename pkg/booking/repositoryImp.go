@@ -59,22 +59,25 @@ func (r *gormRepo) GetBookingByID(ctx context.Context, id int64, forUpdate bool)
 	return &b, nil
 }
 func (r *gormRepo) ListBookings(ctx context.Context, f Filter) ([]entities.Booking, error) {
-	q := r.db.WithContext(ctx).Model(&entities.Booking{})
-	if f.PostID != nil {
-		q = q.Where("post_id = ?", *f.PostID)
-	}
-	if f.ReceiverUserID != nil {
-		q = q.Where("receiver_user_id = ?", *f.ReceiverUserID)
-	}
-	if f.Status != nil {
-		q = q.Where("status = ?", *f.Status)
-	}
-	var out []entities.Booking
-	if err := q.Order("created_at DESC").Find(&out).Error; err != nil {
-		return nil, err
-	}
-	return out, nil
+    q := r.db.WithContext(ctx).Model(&entities.Booking{})
+    if f.PostID != nil {
+        q = q.Where("post_id = ?", *f.PostID)
+    }
+    if f.ReceiverUserID != nil {
+        q = q.Where("receiver_user_id = ?", *f.ReceiverUserID)
+    }
+    if len(f.Statuses) > 0 {
+        q = q.Where("status IN ?", f.Statuses)
+    } else if f.Status != nil {
+        q = q.Where("status = ?", *f.Status)
+    }
+    var out []entities.Booking
+    if err := q.Order("created_at DESC").Find(&out).Error; err != nil {
+        return nil, err
+    }
+    return out, nil
 }
+
 
 func (r *gormRepo) GetBookingByQRToken(ctx context.Context, token string, forUpdate bool) (*entities.Booking, error) {
 	var b entities.Booking

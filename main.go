@@ -10,6 +10,7 @@ import (
 	"github.com/RathaTart/FoodBridge/server"       // ใช้ AuthMiddleware
 	"github.com/RathaTart/FoodBridge/server/routes"
 
+	"github.com/RathaTart/FoodBridge/app"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -125,7 +126,8 @@ func main() {
 	routes.RegisterPostRoutes(protected, db)
 	routes.RegisterReportRoutes(protected, db)
 	routes.RegisterVerificationRoutes(protected, db)
-	// routes.RegisterBookingRoutes(protected, db)
+	routes.RegisterBookingRoutes(protected, db)
+	routes.RegisterHistoryRoutes(protected, app.Deps{DB: db})
 	// routes.RegisterPostDetailRoutes(protected, db)
 	routes.RegisterCommentRoutes(protected, db)
 	routes.RegisterNotificationRoutes(protected, db)

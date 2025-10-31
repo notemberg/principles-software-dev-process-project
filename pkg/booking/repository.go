@@ -11,6 +11,7 @@ type Filter struct {
 	PostID         *int64
 	ReceiverUserID *int64
 	Status         *entities.BookingStatus
+	Statuses       []string
 }
 
 type Repo interface {

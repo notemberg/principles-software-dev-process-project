@@ -41,12 +41,17 @@ func toUnixPtr(t *time.Time) *int64 {
 }
 
 func (s *serviceImpl) toResponse(u *entities.User) *dto.UserResponse {
+	avatar := ""
+    if u.AvatarURL != nil {
+        avatar = *u.AvatarURL
+    }
+	
 	return &dto.UserResponse{
 		UserID:     u.UserID,
 		Phone:      u.Phone,
 		Email:      u.Email,
 		FullName:   u.FullName,
-		AvatarURL:  u.AvatarURL,
+		AvatarURL:  avatar,
 		IsVerified: u.IsVerified,
 
 		// ✅ ฟิลด์โปรไฟล์ใหม่ (ให้แสดงผลใน /me, /users/:id, /auth/login, /users list)

@@ -127,7 +127,7 @@ func (r *gormRepo) CountActiveTodayByUser(ctx context.Context, userID int64, day
 		Model(&entities.Booking{}).
 		Where("receiver_user_id = ?", userID).
 		Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).
-		Where("status IN ('PENDING','QUEUED')").
+		Where("status IN ('PENDING','QUEUED','COMPLETED')").
 		Count(&cnt).Error
 	return cnt, err
 }

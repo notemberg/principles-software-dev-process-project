@@ -9,6 +9,7 @@ import (
 	"github.com/RathaTart/FoodBridge/entities"
 	"github.com/RathaTart/FoodBridge/server" // ใช้ AuthMiddleware
 	"github.com/RathaTart/FoodBridge/server/routes"
+	"github.com/RathaTart/FoodBridge/server/bootstrap"
 
 	"github.com/RathaTart/FoodBridge/app"
 	"github.com/joho/godotenv"
@@ -86,6 +87,9 @@ func main() {
 	); err != nil {
 		log.Fatal("auto-migrate failed: ", err)
 	}
+
+	stopWorkers := bootstrap.StartBackgroundWorkers(db)
+	defer stopWorkers()
 
 	// ----- Echo -----
 	e := echo.New()

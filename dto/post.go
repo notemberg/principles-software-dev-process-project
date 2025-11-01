@@ -22,6 +22,8 @@ type CreatePostRequest struct {
 	// ใน form-data ให้ส่งคีย์ซ้ำหลายแถว เช่น images, images, ...
 	Categories  []string   `json:"categories"   form:"categories"`
 	Images      []string   `json:"images"       form:"images"`
+
+	PostType    string     `json:"post_type"    form:"post_type"    validate:"omitempty,oneof=PROVIDE COMMUNITY"`
 }
 
 type UpdatePostRequest struct {
@@ -41,6 +43,7 @@ type UpdatePostRequest struct {
 	Phone       *string    `json:"phone"        form:"phone"`
 	Categories  *[]string  `json:"categories"   form:"categories"`
 	Images      *[]string  `json:"images"       form:"images"`
+	PostType    *string    `json:"post_type"    form:"post_type"    validate:"omitempty,oneof=PROVIDE COMMUNITY"`
 }
 
 type PostResponse struct {
@@ -48,6 +51,7 @@ type PostResponse struct {
 	ProviderID uint    `json:"provider_id"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
+	PostType    string  `json:"post_type"`
 
 	IsGiveaway bool   `json:"is_giveaway"`
 	Price      *int   `json:"price"`
@@ -78,6 +82,7 @@ type ListPostsQuery struct {
 	IsGiveaway *bool `query:"is_giveaway"`  // filter by mode
 	Category *string `query:"category"`     // เช่น ของคาว
 	Sort     string  `query:"sort"`         // created_at|-created_at|title|-title
+	PostType *string `query:"post_type"`
 }
 
 // ====== PostDetail ======

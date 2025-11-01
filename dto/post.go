@@ -83,6 +83,7 @@ type ListPostsQuery struct {
 	Category *string `query:"category"`     // เช่น ของคาว
 	Sort     string  `query:"sort"`         // created_at|-created_at|title|-title
 	PostType *string `query:"post_type"`
+	ProviderID *uint   `query:"-"`
 }
 
 // ====== PostDetail ======

@@ -16,11 +16,16 @@ func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
 	svc  := postpkg.NewService(repo)
 	ctrl := postpkg.NewController(svc)
 
+	// Posts (ของเดิม)
 	g.POST  ("/posts",               ctrl.Create)
 	g.GET   ("/posts",               ctrl.List)
 	g.GET   ("/posts/:post_id",      ctrl.GetByID)
 	g.PUT   ("/posts/:post_id",      ctrl.Update)
 	g.DELETE("/posts/:post_id",      ctrl.Delete)
+
+	// NEW: ดูโพสต์ตาม user (profile)
+	users := g.Group("/users")
+	users.GET("/:id/posts", ctrl.ListByUser)
 
 	// PostDetail
 	g.POST  ("/posts/:post_id/details",            ctrl.CreateDetail)
@@ -31,7 +36,7 @@ func RegisterPostRoutes(g *echo.Group, db *gorm.DB) {
 	// Booking under /posts
 	posts := g.Group("/posts")
 	bRepo := booking.NewGormRepo(db)
-	
+
 	// inject notification publisher for these booking routes too
 	notifRepo := notification.NewRepository(db)
 	pub := notification.NewPublisher(notifRepo)

@@ -9,6 +9,7 @@ type Controller interface {
 	Delete(c echo.Context) error
 	GetByID(c echo.Context) error
 	List(c echo.Context) error
+	ListByUser(c echo.Context) error
 
 	// PostDetail
 	CreateDetail(c echo.Context) error

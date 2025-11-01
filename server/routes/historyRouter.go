@@ -167,4 +167,55 @@ func RegisterHistoryRoutes(v1 *echo.Group, d app.Deps) {
 		})
 	})
 
+	// ===== User success stats (ดูของคนอื่น) =====
+	// GET /users/:id/stats/success
+	users := v1.Group("/users")
+	users.GET("/:id/stats/success", func(c echo.Context) error {
+		// parse user id จาก path
+		idStr := c.Param("id")
+		uid64, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil || uid64 == 0 {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid user id")
+		}
+		targetUID := uint(uid64)
+
+		var savingBaht, providing, receiving int64
+
+		// Saving (บาท): SUM price ของโพสต์ที่ user นี้ "รับสำเร็จ"
+		if err := db.Raw(`
+		SELECT COALESCE(SUM(COALESCE(p.price, 0)), 0)
+		FROM bookings b
+		JOIN posts p ON p.post_id = b.post_id
+		WHERE b.receiver_user_id = ? AND b.status = 'COMPLETED'
+	`, targetUID).Scan(&savingBaht).Error; err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		// Providing (ครั้ง): COUNT booking COMPLETED ของโพสต์ที่ user นี้เป็นเจ้าของ
+		if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM bookings b
+		JOIN posts p ON p.post_id = b.post_id
+		WHERE p.provider_id = ? AND b.status = 'COMPLETED'
+	`, targetUID).Scan(&providing).Error; err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		// Receiving (ครั้ง): COUNT booking COMPLETED ที่ user นี้เป็นผู้รับ
+		if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM bookings
+		WHERE receiver_user_id = ? AND status = 'COMPLETED'
+	`, targetUID).Scan(&receiving).Error; err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		return c.JSON(http.StatusOK, echo.Map{
+			"user_id":         targetUID,
+			"saving_baht":     savingBaht,
+			"providing_count": providing,
+			"receiving_count": receiving,
+		})
+	})
+
 }

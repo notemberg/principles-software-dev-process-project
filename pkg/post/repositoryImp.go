@@ -79,6 +79,13 @@ func (r *repositoryImpl) ListPosts(q dto.ListPostsQuery, uid uint) ([]entities.P
 		tx = tx.Where("categories @> ?", string(val))
 	}
 
+	// provider_id
+	if q.ProviderID != nil {
+		tx = tx.Where("provider_id = ?", *q.ProviderID)
+	} else if q.Mine != nil && *q.Mine {
+		tx = tx.Where("provider_id = ?", uid)
+	}
+
 	// sort
 	switch q.Sort {
 	case "created_at":

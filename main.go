@@ -7,13 +7,14 @@ import (
 
 	"github.com/RathaTart/FoodBridge/databases"
 	"github.com/RathaTart/FoodBridge/entities"
-	"github.com/RathaTart/FoodBridge/server"       // ใช้ AuthMiddleware
+	"github.com/RathaTart/FoodBridge/server" // ใช้ AuthMiddleware
 	"github.com/RathaTart/FoodBridge/server/routes"
 
 	"github.com/RathaTart/FoodBridge/app"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	gmlog "github.com/labstack/gommon/log"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -88,6 +89,8 @@ func main() {
 
 	// ----- Echo -----
 	e := echo.New()
+	e.Debug = true
+	e.Logger.SetLevel(gmlog.DEBUG)
 	e.HideBanner = true
 	e.Use(middleware.Recover())
 	e.Use(middleware.Logger())
@@ -128,6 +131,7 @@ func main() {
 	routes.RegisterVerificationRoutes(protected, db)
 	routes.RegisterBookingRoutes(protected, db)
 	routes.RegisterHistoryRoutes(protected, app.Deps{DB: db})
+	routes.RegisterUploadRoutes(protected)
 	// routes.RegisterPostDetailRoutes(protected, db)
 	routes.RegisterCommentRoutes(protected, db)
 	routes.RegisterNotificationRoutes(protected, db)
@@ -156,6 +160,16 @@ func main() {
 			"tables":           tables,
 			"booking_status":   enumVals,
 		})
+	})
+
+	// ==== LIST ALL ROUTES + JSON endpoint ====
+	e.GET("/__routes", func(c echo.Context) error {
+		out := []echo.Map{}
+		for _, r := range e.Routes() {
+			out = append(out, echo.Map{"method": r.Method, "path": r.Path, "name": r.Name})
+			e.Logger.Infof("%-6s  %-30s  -> %s", r.Method, r.Path, r.Name)
+		}
+		return c.JSON(200, out)
 	})
 
 	// ----- Start -----

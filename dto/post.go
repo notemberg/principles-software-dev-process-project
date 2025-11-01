@@ -2,54 +2,56 @@ package dto
 
 import "time"
 
-// ====== Post ======
+// ใช้ RFC3339 เช่น "2026-09-19T18:00:00Z"
 type CreatePostRequest struct {
-	Title       string   `json:"title" validate:"required"`
-	Description string   `json:"description"`
+	Title       string     `json:"title"        form:"title"        validate:"required"`
+	Description string     `json:"description"  form:"description"`
+	IsGiveaway  bool       `json:"is_giveaway"  form:"is_giveaway"`
+	Price       *int       `json:"price"        form:"price"`
+	Quantity    *int       `json:"quantity"     form:"quantity"`
 
-	IsGiveaway bool   `json:"is_giveaway"` // toggle "ต้องการแจกอาหาร"
-	Price      *int   `json:"price"`       // 0=free, >0=discount, nil=unknown (community)
-	Quantity   *int   `json:"quantity"`    // nil=unknown (community)
+	// time_format ต้องเป็นสตริง literal ใน tag เท่านั้น (ห้ามต่อสตริง)
+	OpenTime    *time.Time `json:"open_time"    form:"open_time"    time_format:"2006-01-02T15:04:05Z07:00"`
+	CloseTime   *time.Time `json:"close_time"   form:"close_time"   time_format:"2006-01-02T15:04:05Z07:00"`
 
-	OpenTime *time.Time `json:"open_time"`  // required if is_giveaway=true
-	CloseTime *time.Time `json:"close_time"`
+	Address     string     `json:"address"      form:"address"`
+	Lat         *float64   `json:"lat"          form:"lat"`
+	Lng         *float64   `json:"lng"          form:"lng"`
+	Phone       string     `json:"phone"        form:"phone"`
 
-	Address string   `json:"address"`
-	Lat     *float64 `json:"lat"`
-	Lng     *float64 `json:"lng"`
-	Phone   string   `json:"phone"` // เบอร์ติดต่อในโพสต์
+	// ใน form-data ให้ส่งคีย์ซ้ำหลายแถว เช่น images, images, ...
+	Categories  []string   `json:"categories"   form:"categories"`
+	Images      []string   `json:"images"       form:"images"`
 
-	Categories []string `json:"categories"` // ["ของคาว","ของหวาน","ผักสด","ของสด"]
-	Images     []string `json:"images"`     // url/path รูป
+	PostType    string     `json:"post_type"    form:"post_type"    validate:"omitempty,oneof=PROVIDE COMMUNITY"`
 }
 
 type UpdatePostRequest struct {
-	Title       *string  `json:"title"`
-	Description *string  `json:"description"`
+	Title       *string    `json:"title"        form:"title"`
+	Description *string    `json:"description"  form:"description"`
+	IsGiveaway  *bool      `json:"is_giveaway"  form:"is_giveaway"`
+	Price       *int       `json:"price"        form:"price"`
+	Quantity    *int       `json:"quantity"     form:"quantity"`
 
-	IsGiveaway *bool    `json:"is_giveaway"`
-	Price      *int     `json:"price"`
-	Quantity   *int     `json:"quantity"`
+	OpenTime    *time.Time `json:"open_time"    form:"open_time"    time_format:"2006-01-02T15:04:05Z07:00"`
+	CloseTime   *time.Time `json:"close_time"   form:"close_time"   time_format:"2006-01-02T15:04:05Z07:00"`
 
-	OpenTime  *time.Time `json:"open_time"`
-	CloseTime *time.Time `json:"close_time"`
-
-	Status   *string   `json:"status"` // OPEN/CLOSED
-	Address  *string   `json:"address"`
-	Lat      *float64  `json:"lat"`
-	Lng      *float64  `json:"lng"`
-	Phone    *string   `json:"phone"`
-
-	Categories *[]string `json:"categories"`
-	Images     *[]string `json:"images"`
+	Status      *string    `json:"status"       form:"status"`
+	Address     *string    `json:"address"      form:"address"`
+	Lat         *float64   `json:"lat"          form:"lat"`
+	Lng         *float64   `json:"lng"          form:"lng"`
+	Phone       *string    `json:"phone"        form:"phone"`
+	Categories  *[]string  `json:"categories"   form:"categories"`
+	Images      *[]string  `json:"images"       form:"images"`
+	PostType    *string    `json:"post_type"    form:"post_type"    validate:"omitempty,oneof=PROVIDE COMMUNITY"`
 }
-
 
 type PostResponse struct {
 	PostID     uint    `json:"post_id"`
 	ProviderID uint    `json:"provider_id"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
+	PostType    string  `json:"post_type"`
 
 	IsGiveaway bool   `json:"is_giveaway"`
 	Price      *int   `json:"price"`
@@ -80,6 +82,7 @@ type ListPostsQuery struct {
 	IsGiveaway *bool `query:"is_giveaway"`  // filter by mode
 	Category *string `query:"category"`     // เช่น ของคาว
 	Sort     string  `query:"sort"`         // created_at|-created_at|title|-title
+	PostType *string `query:"post_type"`
 }
 
 // ====== PostDetail ======

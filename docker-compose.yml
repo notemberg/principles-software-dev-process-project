@@ -18,5 +18,30 @@ services:
       - "8081:8080"
     depends_on: [db]
 
+  minio:
+    image: minio/minio:latest   # <— ใช้ latest หรือแท็กจริงที่มีอยู่
+    container_name: foodbridge_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - ./data/minio:/data
+
+  mc:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 2;
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb -p local/foodbridge || true;
+      mc anonymous set download local/foodbridge || true;
+      exit 0"
+
 volumes:
   dbdata:

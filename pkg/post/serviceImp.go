@@ -11,6 +11,8 @@ import (
 	"gorm.io/datatypes"
 )
 
+// ============ service ============
+
 type serviceImpl struct {
 	repo Repository
 }
@@ -19,7 +21,8 @@ func NewService(dbRepo Repository) Service {
 	return &serviceImpl{repo: dbRepo}
 }
 
-// ------- helpers -------
+// ============ helpers ============
+
 func stringsToJSON(ss []string) datatypes.JSON {
 	if ss == nil {
 		return datatypes.JSON([]byte("[]"))
@@ -33,7 +36,6 @@ func jsonToStrings(j datatypes.JSON) []string {
 	return out
 }
 
-// allowed categories
 var allowedCats = map[string]struct{}{
 	"ของคาว": {}, "ของหวาน": {}, "ผักสด": {}, "ของสด": {},
 }
@@ -69,28 +71,15 @@ func toPostResp(p *entities.Post) *dto.PostResponse {
 		PostID:     p.PostID,
 		ProviderID: p.ProviderID,
 		Title:      p.Title, Description: p.Description,
+		PostType:   p.PostType,
 		IsGiveaway: p.IsGiveaway,
 		Price:      p.Price, Quantity: p.Quantity,
-		OpenTime: toUnixPtr(p.OpenTime), CloseTime: toUnixPtr(p.CloseTime),
-		Status:  string(p.Status),
-		Address: p.Address, Lat: p.Lat, Lng: p.Lng, Phone: p.Phone,
+		OpenTime:   toUnixPtr(p.OpenTime), CloseTime: toUnixPtr(p.CloseTime),
+		Status:     string(p.Status),
+		Address:    p.Address, Lat: p.Lat, Lng: p.Lng, Phone: p.Phone,
 		Categories: jsonToStrings(p.Categories),
 		Images:     jsonToStrings(p.Images),
 		CreatedAt:  p.CreatedAt.Unix(), UpdatedAt: p.UpdatedAt.Unix(),
-	}
-}
-
-func toDetailResp(d *entities.PostDetail) *dto.PostDetailResponse {
-	return &dto.PostDetailResponse{
-		PostDetailID: d.PostDetailID,
-		PostID:       d.PostID,
-		ItemName:     d.ItemName,
-		Qty:          d.Qty,
-		Unit:         d.Unit,
-		Note:         d.Note,
-		ExpireAt:     toUnixPtr(d.ExpireAt),
-		CreatedAt:    d.CreatedAt.Unix(),
-		UpdatedAt:    d.UpdatedAt.Unix(),
 	}
 }
 
@@ -101,7 +90,22 @@ func ownerOnly(uid uint, providerID uint) error {
 	return nil
 }
 
-// ===== POST =====
+func toDetailResp(d *entities.PostDetail) *dto.PostDetailResponse {
+	return &dto.PostDetailResponse{
+		PostDetailID: d.PostDetailID,
+		PostID:       d.PostID,
+		ItemName:     d.ItemName,
+		Qty:          d.Qty,
+		Unit:         d.Unit,
+		Note:         d.Note,
+		ExpireAt:     toUnixPtr(d.ExpireAt), // ใช้ helper เดิมในไฟล์
+		CreatedAt:    d.CreatedAt.Unix(),
+		UpdatedAt:    d.UpdatedAt.Unix(),
+	}
+}
+
+// ============ POST ============
+
 func (s *serviceImpl) Create(uid uint, req dto.CreatePostRequest) (*dto.PostResponse, error) {
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
@@ -114,23 +118,13 @@ func (s *serviceImpl) Create(uid uint, req dto.CreatePostRequest) (*dto.PostResp
 		return nil, err
 	}
 
-	// validation ตามโหมด
-	if req.IsGiveaway {
-		// ต้องมีเวลาเปิด–ปิด
-		if req.OpenTime == nil || req.CloseTime == nil {
-			return nil, errors.New("open_time and close_time are required when is_giveaway=true")
-		}
-		// price สามารถเป็น 0 (ฟรี) หรือ >0 (ลดราคา) — แนะนำให้ส่งมาเสมอ
-		if req.Price == nil || *req.Price < 0 {
-			return nil, errors.New("price must be >= 0 when is_giveaway=true")
-		}
-		// quantity ต้องมี
-		if req.Quantity == nil || *req.Quantity < 0 {
-			return nil, errors.New("quantity must be >= 0 when is_giveaway=true")
-		}
-	} else {
-		// community mode — ปล่อยว่างได้
-		// (ถ้า FE ส่งมาก็เก็บไว้ได้ ไม่บังคับ)
+	// post_type (PROVIDE | COMMUNITY)
+	pt := strings.ToUpper(strings.TrimSpace(req.PostType))
+	if pt == "" {
+		pt = "PROVIDE"
+	}
+	if pt != "PROVIDE" && pt != "COMMUNITY" {
+		return nil, errors.New("invalid post_type")
 	}
 
 	// lat/lng validation (ถ้ามี)
@@ -143,17 +137,49 @@ func (s *serviceImpl) Create(uid uint, req dto.CreatePostRequest) (*dto.PostResp
 
 	p := &entities.Post{
 		ProviderID: uid,
-		Title:      title, Description: strings.TrimSpace(req.Description),
-		IsGiveaway: req.IsGiveaway,
-		Price:      req.Price, Quantity: req.Quantity,
-		OpenTime: req.OpenTime, CloseTime: req.CloseTime,
+		Title:      title,
+		Description: strings.TrimSpace(req.Description),
+
+		PostType: pt,
+
 		Status:  entities.PostStatusOpen,
 		Address: strings.TrimSpace(req.Address),
 		Lat:     req.Lat, Lng: req.Lng,
-		Phone:      strings.TrimSpace(req.Phone),
+		Phone:   strings.TrimSpace(req.Phone),
+
 		Categories: stringsToJSON(cats),
 		Images:     stringsToJSON(req.Images),
 	}
+
+	if pt == "COMMUNITY" {
+		// โพสต์ชุมชน: ignore/ล้างฟิลด์พาณิชย์
+		p.IsGiveaway = false
+		p.Price = nil
+		p.Quantity = nil
+		p.OpenTime = nil
+		p.CloseTime = nil
+		p.Phone = strings.TrimSpace(req.Phone) // จะล้างก็ได้ ถ้าไม่ต้องการให้แสดง
+	} else {
+		// PROVIDE: validation เฉพาะเมื่อ is_giveaway = true
+		p.IsGiveaway = req.IsGiveaway
+		p.Price = req.Price
+		p.Quantity = req.Quantity
+		p.OpenTime = req.OpenTime
+		p.CloseTime = req.CloseTime
+
+		if p.IsGiveaway {
+			if p.OpenTime == nil || p.CloseTime == nil {
+				return nil, errors.New("open_time and close_time are required when is_giveaway=true")
+			}
+			if p.Price == nil || *p.Price < 0 {
+				return nil, errors.New("price must be >= 0 when is_giveaway=true")
+			}
+			if p.Quantity == nil || *p.Quantity < 0 {
+				return nil, errors.New("quantity must be >= 0 when is_giveaway=true")
+			}
+		}
+	}
+
 	if err := s.repo.CreatePost(p); err != nil {
 		return nil, err
 	}
@@ -169,6 +195,16 @@ func (s *serviceImpl) Update(uid, postID uint, req dto.UpdatePostRequest) (*dto.
 		return nil, err
 	}
 
+	// เปลี่ยนชนิดโพสต์ได้ (PROVIDE | COMMUNITY)
+	if req.PostType != nil {
+		pt := strings.ToUpper(strings.TrimSpace(*req.PostType))
+		if pt != "PROVIDE" && pt != "COMMUNITY" {
+			return nil, errors.New("invalid post_type")
+		}
+		p.PostType = pt
+	}
+
+	// แก้คอร์
 	if req.Title != nil {
 		if v := strings.TrimSpace(*req.Title); v != "" {
 			p.Title = v
@@ -178,12 +214,7 @@ func (s *serviceImpl) Update(uid, postID uint, req dto.UpdatePostRequest) (*dto.
 		p.Description = strings.TrimSpace(*req.Description)
 	}
 
-	// toggle โหมด
-	if req.IsGiveaway != nil {
-		p.IsGiveaway = *req.IsGiveaway
-	}
-
-	// lat/lng
+	// ตำแหน่งที่ตั้ง
 	if req.Lat != nil {
 		if *req.Lat < -90 || *req.Lat > 90 {
 			return nil, errors.New("lat must be between -90 and 90")
@@ -196,32 +227,6 @@ func (s *serviceImpl) Update(uid, postID uint, req dto.UpdatePostRequest) (*dto.
 		}
 		p.Lng = req.Lng
 	}
-
-	if req.Price != nil {
-		if *req.Price < 0 {
-			return nil, errors.New("price must be >= 0")
-		}
-		p.Price = req.Price
-	}
-	if req.Quantity != nil {
-		if *req.Quantity < 0 {
-			return nil, errors.New("quantity must be >= 0")
-		}
-		p.Quantity = req.Quantity
-	}
-	if req.OpenTime != nil {
-		p.OpenTime = req.OpenTime
-	}
-	if req.CloseTime != nil {
-		p.CloseTime = req.CloseTime
-	}
-	if req.Status != nil {
-		st := strings.ToUpper(*req.Status)
-		if st != string(entities.PostStatusOpen) && st != string(entities.PostStatusClosed) {
-			return nil, errors.New("invalid status")
-		}
-		p.Status = entities.PostStatus(st)
-	}
 	if req.Address != nil {
 		p.Address = strings.TrimSpace(*req.Address)
 	}
@@ -229,6 +234,7 @@ func (s *serviceImpl) Update(uid, postID uint, req dto.UpdatePostRequest) (*dto.
 		p.Phone = strings.TrimSpace(*req.Phone)
 	}
 
+	// หมวดหมู่/รูป
 	if req.Categories != nil {
 		cats, err := normalizeCategories(*req.Categories)
 		if err != nil {
@@ -240,16 +246,59 @@ func (s *serviceImpl) Update(uid, postID uint, req dto.UpdatePostRequest) (*dto.
 		p.Images = stringsToJSON(*req.Images)
 	}
 
-	// ถ้าอยู่ในโหมดแจก (is_giveaway==true) บังคับมี price/quantity/เวลาครบหลังอัปเดต
-	if p.IsGiveaway {
-		if p.OpenTime == nil || p.CloseTime == nil {
-			return nil, errors.New("open_time and close_time are required when is_giveaway=true")
+	// สถานะโพสต์
+	if req.Status != nil {
+		st := strings.ToUpper(*req.Status)
+		if st != string(entities.PostStatusOpen) && st != string(entities.PostStatusClosed) {
+			return nil, errors.New("invalid status")
 		}
-		if p.Price == nil || *p.Price < 0 {
-			return nil, errors.New("price must be >= 0 when is_giveaway=true")
+		p.Status = entities.PostStatus(st)
+	}
+
+	// ===== พฤติกรรมตามชนิดโพสต์ =====
+	if p.PostType == "COMMUNITY" {
+		// ล้างฟิลด์พาณิชย์ + บังคับปิดแจก
+		p.IsGiveaway = false
+		p.Price = nil
+		p.Quantity = nil
+		p.OpenTime = nil
+		p.CloseTime = nil
+		// p.Phone = "" // ถ้าต้องการล้าง กดบรรทัดนี้เพิ่มได้
+	} else { // PROVIDE
+		// toggle is_giveaway
+		if req.IsGiveaway != nil {
+			p.IsGiveaway = *req.IsGiveaway
 		}
-		if p.Quantity == nil || *p.Quantity < 0 {
-			return nil, errors.New("quantity must be >= 0 when is_giveaway=true")
+		// อัปเดตฟิลด์พาณิชย์
+		if req.Price != nil {
+			if *req.Price < 0 {
+				return nil, errors.New("price must be >= 0")
+			}
+			p.Price = req.Price
+		}
+		if req.Quantity != nil {
+			if *req.Quantity < 0 {
+				return nil, errors.New("quantity must be >= 0")
+			}
+			p.Quantity = req.Quantity
+		}
+		if req.OpenTime != nil {
+			p.OpenTime = req.OpenTime
+		}
+		if req.CloseTime != nil {
+			p.CloseTime = req.CloseTime
+		}
+		// ถ้าอยู่ในโหมดแจก ต้องมีค่าบังคับ
+		if p.IsGiveaway {
+			if p.OpenTime == nil || p.CloseTime == nil {
+				return nil, errors.New("open_time and close_time are required when is_giveaway=true")
+			}
+			if p.Price == nil || *p.Price < 0 {
+				return nil, errors.New("price must be >= 0 when is_giveaway=true")
+			}
+			if p.Quantity == nil || *p.Quantity < 0 {
+				return nil, errors.New("quantity must be >= 0 when is_giveaway=true")
+			}
 		}
 	}
 
@@ -301,7 +350,8 @@ func (s *serviceImpl) List(uid uint, q dto.ListPostsQuery) (*dto.PagedResult[dto
 	}, nil
 }
 
-// ------- PostDetail -------
+// ============ POST DETAIL ============
+
 func (s *serviceImpl) CreateDetail(uid, postID uint, req dto.CreatePostDetailRequest) (*dto.PostDetailResponse, error) {
 	p, err := s.repo.FindPostByID(postID)
 	if err != nil {
@@ -376,7 +426,6 @@ func (s *serviceImpl) DeleteDetail(uid, postID, detailID uint) error {
 }
 
 func (s *serviceImpl) ListDetails(uid, postID uint) ([]dto.PostDetailResponse, error) {
-	// เปิดให้ดูได้ทุกคน (ปรับ rule ได้)
 	dets, err := s.repo.ListDetails(postID)
 	if err != nil {
 		return nil, err

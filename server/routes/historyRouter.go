@@ -120,4 +120,51 @@ func RegisterHistoryRoutes(v1 *echo.Group, d app.Deps) {
 		}
 		return c.JSON(http.StatusOK, out)
 	})
+
+	// ===== My success stats =====
+	// GET /me/stats/success
+	me.GET("/stats/success", func(c echo.Context) error {
+		uid64, err := uidFromCtx(c) // ใช้ helper uidFromCtx ที่ไฟล์นี้มีอยู่แล้ว
+		if err != nil {
+			return err
+		}
+
+		var savingBaht, providing, receiving int64
+
+		// Saving (บาท)
+		if err := db.Raw(`
+        SELECT COALESCE(SUM(p.price), 0)
+        FROM bookings b
+        JOIN posts p USING (post_id)
+        WHERE b.receiver_user_id = ? AND b.status = 'COMPLETED'
+    `, uid64).Scan(&savingBaht).Error; err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		// Providing (ครั้ง) — เจ้าของโพสต์คือ provider_id
+		if err := db.Raw(`
+        SELECT COUNT(*)
+        FROM bookings b
+        JOIN posts p USING (post_id)
+        WHERE p.provider_id = ? AND b.status = 'COMPLETED'
+    `, uid64).Scan(&providing).Error; err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		// Receiving (ครั้ง)
+		if err := db.Raw(`
+        SELECT COUNT(*)
+        FROM bookings b
+        WHERE b.receiver_user_id = ? AND b.status = 'COMPLETED'
+    `, uid64).Scan(&receiving).Error; err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		return c.JSON(http.StatusOK, echo.Map{
+			"saving_baht":     savingBaht,
+			"providing_count": providing,
+			"receiving_count": receiving,
+		})
+	})
+
 }

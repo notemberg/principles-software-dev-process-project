@@ -97,12 +97,23 @@ func (r *repositoryImpl) ListPosts(q dto.ListPostsQuery, uid uint) ([]entities.P
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if q.Page <= 0 { q.Page = 1 }
-	if q.PageSize <= 0 { q.PageSize = 20 }
-	if q.PageSize > 100 { q.PageSize = 100 }
+	if q.Page <= 0 {
+		q.Page = 1
+	}
+	if q.PageSize <= 0 {
+		q.PageSize = 20
+	}
+	if q.PageSize > 100 {
+		q.PageSize = 100
+	}
+
+	// post_type
+	if q.PostType != nil && strings.TrimSpace(*q.PostType) != "" {
+		tx = tx.Where("post_type = ?", strings.ToUpper(strings.TrimSpace(*q.PostType)))
+	}
 
 	var rows []entities.Post
-	if err := tx.Limit(q.PageSize).Offset((q.Page-1)*q.PageSize).Find(&rows).Error; err != nil {
+	if err := tx.Limit(q.PageSize).Offset((q.Page - 1) * q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

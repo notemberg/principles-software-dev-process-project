@@ -137,6 +137,51 @@ func (h *controllerImpl) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+func (h *controllerImpl) ListByUser(c echo.Context) error {
+    // ไม่ต้องใช้ uid จาก token ก็ได้ เพราะเป็นการดู profile คนอื่น
+    _, _ = uidFromCtx(c) // ถ้าระบบคุณต้องการให้ล็อกอินก่อน ก็คงไว้
+
+    // อ่าน :id จาก path
+    userID, err := mustUintParam(c, "id")
+    if err != nil {
+        return err
+    }
+
+    var q dto.ListPostsQuery
+
+    // page / page_size
+    if v := c.QueryParam("page"); v != "" {
+        if n, e := strconv.Atoi(v); e == nil { q.Page = n }
+    }
+    if v := c.QueryParam("page_size"); v != "" {
+        if n, e := strconv.Atoi(v); e == nil { q.PageSize = n }
+    }
+
+    // ตัวกรองทั่วไป (เหมือน List)
+    q.Q = c.QueryParam("q")
+    if v := c.QueryParam("status"); v != "" { vv := v; q.Status = &vv }
+    if v := c.QueryParam("is_giveaway"); v != "" {
+        if b, e := strconv.ParseBool(strings.TrimSpace(v)); e == nil { q.IsGiveaway = &b
+        } else { return echo.NewHTTPError(http.StatusBadRequest, "invalid is_giveaway") }
+    }
+    if v := c.QueryParam("category"); v != "" { vv := strings.TrimSpace(v); q.Category = &vv }
+    q.Sort = c.QueryParam("sort")
+    if v := c.QueryParam("post_type"); v != "" {
+        vv := strings.ToUpper(strings.TrimSpace(v))
+        q.PostType = &vv
+    }
+
+    // ใส่ ProviderID เพื่อบังคับดูโพสต์ของ user คนนั้น
+    q.ProviderID = &userID
+
+    // เรียกใช้เหมือนเดิม
+    uid, _ := uidFromCtx(c) // ถ้าไม่ต้องใช้สิทธิ์พิเศษ ค่า uid ไม่ได้มีผล เพราะเราเซ็ต ProviderID ไปแล้ว
+    res, err := h.svc.List(uid, q)
+    if err != nil { return echo.NewHTTPError(http.StatusInternalServerError, err.Error()) }
+    return c.JSON(http.StatusOK, res)
+}
+
+
 // ===== PostDetail =====
 func (h *controllerImpl) CreateDetail(c echo.Context) error {
 	uid, err := uidFromCtx(c)

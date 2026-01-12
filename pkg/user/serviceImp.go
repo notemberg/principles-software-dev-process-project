@@ -1,0 +1,363 @@
+// pkg/user/serviceImp.go
+package user
+
+import (
+	"errors"
+	"os"
+	"regexp"
+	"strings"
+	"time"
+	"fmt"
+
+	"github.com/RathaTart/FoodBridge/config"
+	"github.com/RathaTart/FoodBridge/dto"
+	"github.com/RathaTart/FoodBridge/entities"
+	"github.com/golang-jwt/jwt"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+)
+
+type serviceImpl struct {
+	repo Repository
+	db   *gorm.DB
+}
+
+func NewService(db *gorm.DB, repo Repository) Service {
+	return &serviceImpl{db: db, repo: repo}
+}
+
+// ---------- helpers ----------
+var rePhone = regexp.MustCompile(`^[0-9+\- ()]{6,20}$`)
+var rePostal = regexp.MustCompile(`^[0-9]{4,6}$`)
+
+
+func toUnixPtr(t *time.Time) *int64 {
+	if t == nil {
+		return nil
+	}
+	u := t.Unix()
+	return &u
+}
+
+func (s *serviceImpl) toResponse(u *entities.User) *dto.UserResponse {
+	avatar := ""
+    if u.AvatarURL != nil {
+        avatar = *u.AvatarURL
+    }
+	
+	return &dto.UserResponse{
+		UserID:     u.UserID,
+		Phone:      u.Phone,
+		Email:      u.Email,
+		FullName:   u.FullName,
+		AvatarURL:  avatar,
+		IsVerified: u.IsVerified,
+
+		// ✅ ฟิลด์โปรไฟล์ใหม่ (ให้แสดงผลใน /me, /users/:id, /auth/login, /users list)
+		DisplayName: u.DisplayName,
+		FirstName:   u.FirstName,
+		LastName:    u.LastName,
+		Bio:         u.Bio,
+		AddressLine: u.AddressLine,
+		Province:    u.Province,
+		PostalCode:  u.PostalCode,
+		Phone2:      u.Phone2,
+
+		CreatedAt:   u.CreatedAt.Unix(),
+		UpdatedAt:   u.UpdatedAt.Unix(),
+		LastLoginAt: toUnixPtr(u.LastLoginAt),
+	}
+}
+
+
+func isNotFound(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), strings.ToLower(logger.ErrRecordNotFound.Error()))
+}
+
+var reNonAlnum = regexp.MustCompile(`[^a-z0-9\-]+`)
+
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ReplaceAll(s, " ", "-")
+	s = reNonAlnum.ReplaceAllString(s, "")
+	if s == "" {
+		s = "user"
+	}
+	return s
+}
+
+// helper: base URL สำหรับ FE
+func publicBaseURL() string {
+	if v := os.Getenv("PUBLIC_BASE_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	// ค่าเริ่มต้น (แก้เป็น domain จริงของ FE ได้)
+	return "http://localhost:3000"
+}
+
+// ---------- IMPLEMENTATION ----------
+
+func (s *serviceImpl) Register(req dto.RegisterRequest) (*dto.UserResponse, error) {
+	req.Phone = strings.TrimSpace(req.Phone)
+	req.FullName = strings.TrimSpace(req.FullName)
+	if req.Email != nil {
+		e := strings.TrimSpace(*req.Email)
+		req.Email = &e
+	}
+
+	// validate
+	if req.Phone == "" || len(req.Password) < 8 || req.FullName == "" {
+		return nil, errors.New("invalid input")
+	}
+
+	// duplicate check
+	if ok, err := s.repo.ExistsByPhone(req.Phone); err != nil {
+		return nil, err
+	} else if ok {
+		return nil, errors.New("phone already used")
+	}
+	if req.Email != nil && *req.Email != "" {
+		if ok, err := s.repo.ExistsByEmail(*req.Email); err != nil {
+			return nil, err
+		} else if ok {
+			return nil, errors.New("email already used")
+		}
+	}
+
+	// hash password
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	u := &entities.User{
+		Phone:        req.Phone,
+		Email:        req.Email,
+		PasswordHash: string(hash),
+		FullName:     req.FullName,
+		IsVerified:   false,
+		Role:        "USER",
+	}
+
+	if err := s.repo.Create(u); err != nil {
+		return nil, err
+	}
+	return s.toResponse(u), nil
+}
+
+func (s *serviceImpl) Login(req dto.LoginRequest) (*dto.AuthResponse, error) {
+	login := strings.TrimSpace(req.Login)
+	u, err := s.repo.FindByLogin(login)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) || isNotFound(err) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)) != nil {
+		return nil, errors.New("invalid credential")
+	}
+
+	// อัปเดต last login
+	now := time.Now()
+	u.LastLoginAt = &now
+	if err := s.repo.Update(u); err != nil {
+		// ไม่ critical ถึงขั้นต้อง fail login — จะข้ามได้ถ้าต้องการ
+	}
+
+	// ===== สร้าง JWT =====
+	cfg := config.Load()
+	claims := jwt.MapClaims{
+		"uid": u.UserID,                              // ใช้ uid แทน
+		"exp": time.Now().Add(72 * time.Hour).Unix(), // อายุ 3 วัน
+		"role": u.Role, 
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokStr, err := token.SignedString([]byte(cfg.JWTSecret))
+	if err != nil {
+		return nil, errors.New("failed to sign token")
+	}
+
+	return &dto.AuthResponse{
+		Token: tokStr,
+		User:  s.toResponse(u),
+	}, nil
+}
+
+func (s *serviceImpl) GetByID(id uint) (*dto.UserResponse, error) {
+	u, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	return s.toResponse(u), nil
+}
+
+func (s *serviceImpl) Me(uid uint) (*dto.UserResponse, error) {
+	u, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, err
+	}
+	return s.toResponse(u), nil
+}
+
+func (s *serviceImpl) UpdateMe(uid uint, req dto.UpdateMeRequest) (*dto.UserResponse, error) {
+	u, err := s.repo.FindByID(uid)
+	if err != nil { return nil, err }
+
+	if req.FullName != nil   { u.FullName  = strings.TrimSpace(*req.FullName) }
+	if req.Email != nil      { v := strings.TrimSpace(*req.Email); u.Email = &v }
+	if req.AvatarURL != nil  { v := strings.TrimSpace(*req.AvatarURL); u.AvatarURL = &v }
+
+	if req.DisplayName != nil { u.DisplayName = strings.TrimSpace(*req.DisplayName) }
+	if req.FirstName != nil   { u.FirstName   = strings.TrimSpace(*req.FirstName) }
+	if req.LastName != nil    { u.LastName    = strings.TrimSpace(*req.LastName) }
+	if req.Bio != nil         { u.Bio         = strings.TrimSpace(*req.Bio) }
+	if req.AddressLine != nil { u.AddressLine = strings.TrimSpace(*req.AddressLine) }
+	if req.Province != nil    { u.Province    = strings.TrimSpace(*req.Province) }
+	if req.PostalCode != nil  {
+		v := strings.TrimSpace(*req.PostalCode)
+		if v != "" && !rePostal.MatchString(v) { return nil, errors.New("invalid postal_code") }
+		u.PostalCode = v
+	}
+	if req.Phone != nil {
+		v := strings.TrimSpace(*req.Phone)
+		if v != "" && !rePhone.MatchString(v) { return nil, errors.New("invalid phone") }
+		u.Phone2 = v
+	}
+
+	if err := s.repo.Update(u); err != nil { return nil, err }
+	return s.toResponse(u), nil
+}
+
+func (s *serviceImpl) ChangeMyPassword(uid uint, req dto.ChangePasswordRequest) error {
+	// ความยาวขั้นต่ำ
+	if len(req.NewPassword) < 8 {
+		return errors.New("new password too short (min 8)")
+	}
+	// ต้องตรงกับฟิลด์ยืนยัน
+	if req.NewPassword != req.ConfirmNewPassword {
+		return errors.New("new password and confirm do not match")
+	}
+	// ไม่ควรเหมือนรหัสเดิม
+	if req.NewPassword == req.OldPassword {
+		return errors.New("new password must be different from old password")
+	}
+
+	u, err := s.repo.FindByID(uid)
+	if err != nil {
+		return err
+	}
+
+	// ตรวจรหัสเดิม
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.OldPassword)) != nil {
+		return errors.New("old password incorrect")
+	}
+
+	// hash ใหม่
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	u.PasswordHash = string(hash)
+
+	return s.repo.Update(u)
+}
+
+func (s *serviceImpl) List(q dto.ListUsersQuery) (*dto.PagedResult[dto.UserResponse], error) {
+	if q.Page <= 0 {
+		q.Page = 1
+	}
+	if q.PageSize <= 0 {
+		q.PageSize = 20
+	}
+	if q.PageSize > 100 {
+		q.PageSize = 100
+	}
+
+	tx := s.db.Model(&entities.User{})
+
+	// filter คำค้น
+	if strings.TrimSpace(q.Q) != "" {
+		like := "%" + strings.TrimSpace(q.Q) + "%"
+		tx = tx.Where(
+			s.db.Where("full_name ILIKE ?", like).
+				Or("phone ILIKE ?", like).
+				Or("email ILIKE ?", like),
+		)
+	}
+	// filter verified
+	if q.Verified != nil {
+		tx = tx.Where("is_verified = ?", *q.Verified)
+	}
+	// sort
+	switch q.Sort {
+	case "created_at":
+		tx = tx.Order("created_at ASC")
+	case "-created_at", "":
+		tx = tx.Order("created_at DESC")
+	case "full_name":
+		tx = tx.Order("full_name ASC")
+	case "-full_name":
+		tx = tx.Order("full_name DESC")
+	default:
+		tx = tx.Order("created_at DESC")
+	}
+
+	// count
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	// page
+	var users []entities.User
+	if err := tx.
+		Limit(q.PageSize).
+		Offset((q.Page - 1) * q.PageSize).
+		Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]dto.UserResponse, 0, len(users))
+	for i := range users {
+		out = append(out, *s.toResponse(&users[i]))
+	}
+	return &dto.PagedResult[dto.UserResponse]{
+		Items:    out,
+		Total:    total,
+		Page:     q.Page,
+		PageSize: q.PageSize,
+	}, nil
+}
+
+func (s *serviceImpl) Delete(uid uint, targetID uint) error {
+	if uid != targetID {
+		return errors.New("forbidden: can only delete yourself")
+	}
+	// ใช้ Unscoped().Delete ถ้าต้องการ hard delete จริง ๆ
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// ลบด้วย primary key
+		if err := tx.Unscoped().Where("user_id = ?", targetID).
+			Delete(&entities.User{}).Error; err != nil {
+			return err
+		}
+		// ถ้ามีตารางลูก/foreign key อื่น ๆ ให้จัดการด้วย (ON DELETE CASCADE หรือ manual)
+		return nil
+	})
+}
+
+
+func (s *serviceImpl) GetShareLinkByID(id uint) (*dto.ShareLinkResponse, error) {
+	u, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	slug := slugify(u.FullName)
+	url := publicBaseURL() + "/u/" + fmt.Sprintf("%d-%s", u.UserID, slug)
+	return &dto.ShareLinkResponse{ShareURL: url}, nil
+}
+
+func (s *serviceImpl) GetMyShareLink(uid uint) (*dto.ShareLinkResponse, error) {
+	return s.GetShareLinkByID(uid)
+}
